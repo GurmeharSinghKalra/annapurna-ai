@@ -1,0 +1,105 @@
+# API Reference
+
+Base URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Health
+
+```http
+GET /health
+```
+
+Returns service status and ML model availability.
+
+## Crop Recommendations
+
+```http
+POST /recommendations
+```
+
+Body:
+
+```json
+{
+  "farmer_name": "Demo Farmer",
+  "phone": "9999999999",
+  "location": "Sonipat, Haryana",
+  "language": "English",
+  "land_size": 2,
+  "season": "Kharif",
+  "soil_type": "Alluvial",
+  "ph": 6.6,
+  "nitrogen": 62,
+  "phosphorus": 41,
+  "potassium": 48,
+  "temperature": 29,
+  "humidity": 64,
+  "rainfall": 115,
+  "budget": 35000,
+  "market_priority": "Balanced"
+}
+```
+
+## Reports
+
+```http
+POST /reports/recommendation
+```
+
+Returns a text report for the submitted farm profile.
+
+## Authentication
+
+```http
+POST /auth/register
+POST /auth/login
+```
+
+Register body:
+
+```json
+{
+  "name": "Demo Farmer",
+  "phone": "9999999999",
+  "password": "secret123",
+  "language": "English",
+  "location": "Sonipat, Haryana"
+}
+```
+
+Login body:
+
+```json
+{
+  "phone": "9999999999",
+  "password": "secret123"
+}
+```
+
+## Advisory And Data
+
+```http
+POST /weather
+POST /soil
+POST /market
+POST /chat
+POST /disease
+```
+
+## History
+
+```http
+GET /history
+POST /history
+```
+
+## Admin And Metadata
+
+```http
+GET /crops
+GET /admin/summary
+GET /integrations/status
+```

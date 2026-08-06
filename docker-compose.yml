@@ -1,0 +1,26 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AGMARKNET_SOURCE_URL: ${AGMARKNET_SOURCE_URL:-}
+      ENAM_SOURCE_URL: ${ENAM_SOURCE_URL:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - annapurna_data:/app/data
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
+
+volumes:
+  annapurna_data:

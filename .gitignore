@@ -1,0 +1,10 @@
+node_modules/
+dist/
+backend/.venv/
+backend/.pytest_cache/
+backend/data/*.sqlite
+backend/models/*.joblib
+__pycache__/
+*.pyc
+*.log
+output/playwright/
