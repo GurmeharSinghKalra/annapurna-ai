@@ -50,7 +50,7 @@ Supported keys:
 
 - `OPENWEATHER_API_KEY`
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL` (defaults to `gemini-2.5-flash`)
+- `GEMINI_MODEL` (defaults to `gemini-3.6-flash`)
 - `AGMARKNET_SOURCE_URL`
 - `ENAM_SOURCE_URL`
 

@@ -442,7 +442,7 @@ function App() {
         agmarknet: 'offline',
         enam: 'offline',
         gemini: 'backend_offline',
-        gemini_model: 'gemini-2.5-flash',
+        gemini_model: 'gemini-3.6-flash',
         genai: 'local_advisory_fallback'
       });
     }

@@ -87,7 +87,7 @@ Copy-Item .env.example .env
 The app works without keys using local/manual fallbacks.
 
 Set `GEMINI_API_KEY` to enable every generative or multimodal AI feature. `GEMINI_MODEL`
-defaults to `gemini-2.5-flash` and can be changed without editing source code. Keep the key
+defaults to `gemini-3.6-flash` and can be changed without editing source code. Keep the key
 in the backend environment only; never expose it through Vite or browser code.
 
 ## Train ML Model
