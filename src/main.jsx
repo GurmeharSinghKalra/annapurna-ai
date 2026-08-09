@@ -599,9 +599,9 @@ function App() {
       <section className="workspace">
         <header className="hero-console">
           <div className="window-titlebar">
-            <div className="window-controls" aria-hidden="true"><span /><span /><span /></div>
-            <strong>ANNAPURNA_AI.EXE</strong>
-            <span className="window-mode">FIELD MODE</span>
+            <div className="title-ornament" aria-hidden="true"><span /></div>
+            <strong>ANNAPURNA / FIELD SYSTEM</strong>
+            <span className="window-mode">LIVE ADVISORY</span>
           </div>
           <div className="hero-body">
             <div className="hero-copy">
@@ -614,7 +614,7 @@ function App() {
                 <button className="secondary-action compact" onClick={exportReport}><Download size={18} /> Export</button>
               </div>
             </div>
-            <FieldScene crop={topCrop} moisture={farm.humidity} />
+            <FieldMap crop={topCrop} moisture={farm.humidity} />
           </div>
         </header>
 
@@ -800,47 +800,57 @@ function App() {
   );
 }
 
-function FieldScene({ crop, moisture }) {
-  const [view, setView] = useState({ x: 58, z: -42 });
-  const plots = Array.from({ length: 16 }, (_, index) => index);
+function FieldMap({ crop, moisture }) {
+  const [focus, setFocus] = useState({ x: 68, y: 34 });
+  const rows = Array.from({ length: 7 }, (_, index) => index);
 
   function inspectField(event) {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const horizontal = (event.clientX - bounds.left) / bounds.width - 0.5;
-    const vertical = (event.clientY - bounds.top) / bounds.height - 0.5;
-    setView({ x: 58 - vertical * 12, z: -42 + horizontal * 16 });
+    const x = Math.max(7, Math.min(93, ((event.clientX - bounds.left) / bounds.width) * 100));
+    const y = Math.max(9, Math.min(91, ((event.clientY - bounds.top) / bounds.height) * 100));
+    setFocus({ x, y });
   }
 
   return (
     <figure
       className="field-terminal"
       onPointerMove={inspectField}
-      onPointerLeave={() => setView({ x: 58, z: -42 })}
-      aria-label={`Interactive field model showing ${crop.name} at ${crop.suitability} percent suitability`}
+      onPointerLeave={() => setFocus({ x: 68, y: 34 })}
+      aria-label={`Interactive field map showing ${crop.name} at ${crop.suitability} percent suitability`}
     >
       <div className="field-readout">
-        <span>LIVE FIELD MODEL</span>
+        <span>FIELD INTELLIGENCE</span>
         <strong>{crop.name.toUpperCase()} / {crop.suitability}%</strong>
       </div>
       <div className="scene-window">
-        <div
-          className="voxel-field"
-          style={{ '--field-x': `${view.x}deg`, '--field-z': `${view.z}deg` }}
-        >
-          {plots.map((plot) => (
-            <div className={`voxel ${plot % 5 === 0 ? 'voxel-water' : ''}`} key={plot}>
-              <span className="face face-top" />
-              <span className="face face-front" />
-              <span className="face face-right" />
-              {plot % 5 !== 0 && <i className="crop-sprout" />}
+        <div className="field-map-surface">
+          <div className="contour contour-one" />
+          <div className="contour contour-two" />
+          <div className="field-rows" aria-hidden="true">
+            {rows.map((row) => <span style={{ '--row': row }} key={row} />)}
+          </div>
+          <div className="water-channel" aria-hidden="true" />
+          <div
+            className="suitability-dial"
+            style={{ '--score': `${crop.suitability * 3.6}deg` }}
+          >
+            <div>
+              <strong>{crop.suitability}%</strong>
+              <span>SUITABLE</span>
             </div>
-          ))}
+          </div>
+          <div className="heritage-compass" aria-hidden="true"><span /></div>
+          <span
+            className="scan-cursor"
+            style={{ left: `${focus.x}%`, top: `${focus.y}%` }}
+            aria-hidden="true"
+          />
         </div>
       </div>
       <figcaption>
         <span><i className="legend-dot soil" /> {crop.water} water</span>
         <span><i className="legend-dot signal" /> {moisture}% humidity</span>
-        <span>MOVE TO INSPECT</span>
+        <span>MOVE TO EXPLORE</span>
       </figcaption>
     </figure>
   );
