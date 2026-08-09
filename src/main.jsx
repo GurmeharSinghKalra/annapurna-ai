@@ -294,7 +294,7 @@ function scoreCrop(crop, farm) {
 }
 
 function App() {
-  const [route, setRoute] = useState(() => window.location.pathname === '/' ? '/dashboard' : window.location.pathname);
+  const [route, setRoute] = useState(() => window.location.pathname || '/');
   const [farm, setFarm] = useState(initialFarm);
   const [authUser, setAuthUser] = useState(null);
   const [authPassword, setAuthPassword] = useState('secret123');
@@ -338,7 +338,7 @@ function App() {
   useEffect(() => {
     loadHistory();
     loadIntegrationStatus();
-    const handleRoute = () => setRoute(window.location.pathname === '/' ? '/dashboard' : window.location.pathname);
+    const handleRoute = () => setRoute(window.location.pathname || '/');
     window.addEventListener('popstate', handleRoute);
     return () => window.removeEventListener('popstate', handleRoute);
   }, []);
@@ -581,6 +581,10 @@ function App() {
     }
   }
 
+  if (route === '/' || route === '/about') {
+    return <MarketingSite page={route === '/about' ? 'about' : 'home'} navigate={navigate} />;
+  }
+
   if (route === '/register' || route === '/login') {
     return (
       <AuthScreen
@@ -751,12 +755,153 @@ function App() {
   );
 }
 
+function MarketingSite({ page, navigate }) {
+  return (
+    <main className="marketing-site">
+      <PublicHeader page={page} navigate={navigate} />
+      {page === 'about' ? <AboutPage navigate={navigate} /> : <LandingPage navigate={navigate} />}
+      <PublicFooter navigate={navigate} />
+    </main>
+  );
+}
+
+function PublicHeader({ page, navigate }) {
+  return (
+    <header className="public-header">
+      <button className="public-brand" onClick={() => navigate('/')}>
+        <span className="public-brand-mark"><Wheat size={22} /></span>
+        <span><strong>Annapurna AI</strong><small>Farm intelligence</small></span>
+      </button>
+      <nav aria-label="Public navigation">
+        <button className={page === 'home' ? 'active' : ''} onClick={() => navigate('/')}>Home</button>
+        <button className={page === 'about' ? 'active' : ''} onClick={() => navigate('/about')}>About</button>
+        <button onClick={() => navigate('/login')}>Sign in</button>
+        <button className="public-cta" onClick={() => navigate('/register')}>Create account <span>→</span></button>
+      </nav>
+    </header>
+  );
+}
+
+function LandingPage({ navigate }) {
+  return (
+    <>
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <p className="marketing-kicker"><span /> Practical AI for Indian agriculture</p>
+          <h1>Plan every season with a clearer view of your farm.</h1>
+          <p>Annapurna AI brings crop recommendations, field insights, disease support, and multilingual guidance into one focused workspace—so every recommendation is easier to understand and act on.</p>
+          <div className="landing-actions">
+            <button className="marketing-primary" onClick={() => navigate('/register')}>Start your farm plan <span>→</span></button>
+            <button className="marketing-secondary" onClick={() => navigate('/about')}>See how it works</button>
+          </div>
+          <div className="landing-trust">
+            <span><CheckCircle2 size={16} /> Explainable recommendations</span>
+            <span><CheckCircle2 size={16} /> Works in demo mode</span>
+            <span><CheckCircle2 size={16} /> Farmer-first safeguards</span>
+          </div>
+        </div>
+        <div className="product-preview" aria-label="Annapurna crop recommendation preview">
+          <div className="preview-top"><span><i /> Live field plan</span><small>Kharif · Sonipat</small></div>
+          <div className="preview-body">
+            <div className="preview-heading"><div><small>Best crop match</small><h3>Maize</h3></div><strong>91%</strong></div>
+            <div className="preview-progress"><span /></div>
+            <div className="preview-metrics"><div><small>Expected return</small><strong>₹72,000</strong></div><div><small>Water need</small><strong>Medium</strong></div><div><small>Soil match</small><strong>Strong</strong></div></div>
+            <div className="preview-advice"><Leaf size={18} /><div><strong>Why this works</strong><p>Alluvial soil, rainfall, temperature, and budget are aligned with the current crop profile.</p></div></div>
+            <div className="preview-chart" aria-hidden="true">{[46, 62, 54, 78, 68, 88, 74, 92].map((height, index) => <span style={{ height: `${height}%` }} key={index} />)}</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="source-strip"><span>Designed to connect with</span><strong>SoilGrids</strong><strong>ISRO Bhuvan</strong><strong>OpenWeather</strong><strong>Agmarknet</strong><strong>eNAM</strong></section>
+
+      <section className="marketing-section" id="features">
+        <div className="section-intro"><p className="marketing-kicker">One connected workspace</p><h2>From field conditions to a practical crop plan.</h2><p>Each tool uses the same farmer profile, so recommendations and advisory stay relevant instead of becoming isolated reports.</p></div>
+        <div className="feature-cards">
+          <MarketingCard icon={Sprout} label="Plan" title="Crop recommendations" text="Compare crops using season, soil, nutrients, rainfall, temperature, water, budget, and market priority." />
+          <MarketingCard icon={BarChart3} label="Understand" title="Field and profit insights" text="See suitability, expected yield, estimated return, cautions, rotation advice, and sustainability guidance." />
+          <MarketingCard icon={Camera} label="Protect" title="Disease support" text="Upload a clear leaf image for an initial crop-aware advisory and a responsible next step." />
+          <MarketingCard icon={Bot} label="Ask" title="Multilingual advisor" text="Ask irrigation, fertilizer, disease, and planning questions using the current farm and crop context." />
+        </div>
+      </section>
+
+      <section className="how-section">
+        <div className="section-intro"><p className="marketing-kicker">A simple workflow</p><h2>Three steps from uncertainty to direction.</h2></div>
+        <div className="step-list">
+          <div><span>01</span><h3>Describe your farm</h3><p>Add the conditions you know. The application works with manual inputs and can connect to external data sources.</p></div>
+          <div><span>02</span><h3>Compare the evidence</h3><p>Review ranked crop matches with clear reasons, risks, water needs, yield, and return estimates.</p></div>
+          <div><span>03</span><h3>Save and act carefully</h3><p>Keep the plan in your records, export a report, and verify important decisions with local expertise.</p></div>
+        </div>
+      </section>
+
+      <section className="responsible-section">
+        <div className="responsible-mark"><ShieldCheck size={32} /></div>
+        <div><p className="marketing-kicker">Responsible by design</p><h2>Advice should support farmers—not hide uncertainty.</h2><p>Annapurna presents recommendations as decision support, explains the factors behind them, and encourages local verification before treatment or investment.</p></div>
+        <button className="marketing-secondary" onClick={() => navigate('/about')}>Read about the project</button>
+      </section>
+
+      <MarketingCTA navigate={navigate} />
+    </>
+  );
+}
+
+function AboutPage({ navigate }) {
+  return (
+    <>
+      <section className="about-hero">
+        <p className="marketing-kicker">About Annapurna AI</p>
+        <h1>Building clearer agricultural decisions with practical, explainable technology.</h1>
+        <p>Annapurna AI is a crop recommendation and agricultural advisory project designed around the real questions farmers face before and during a growing season.</p>
+      </section>
+
+      <section className="about-story marketing-section">
+        <div className="about-story-copy"><p className="marketing-kicker">Why this project exists</p><h2>Farm information is available. Turning it into one clear decision is the harder problem.</h2></div>
+        <div className="about-prose"><p>Soil readings, weather, crop requirements, market priorities, disease symptoms, and farm budgets often live in separate systems. That fragmentation makes planning slower and recommendations harder to trust.</p><p>Annapurna brings these signals into one understandable workflow. It ranks suitable crops, explains why they fit, identifies cautions, estimates yield and return, and carries the same context into disease support and the AI advisor.</p></div>
+      </section>
+
+      <section className="project-pillars">
+        <MarketingCard icon={Search} label="Transparent" title="Explain the recommendation" text="Every crop match includes reasons and cautions instead of presenting a score without context." />
+        <MarketingCard icon={Database} label="Connected" title="Use the right signals" text="The architecture supports soil, weather, market, farm-profile, image, and historical data." />
+        <MarketingCard icon={ShieldCheck} label="Responsible" title="Respect farmer judgment" text="Outputs are advisory, consent-aware, and designed to be checked against local knowledge." />
+      </section>
+
+      <section className="architecture-section">
+        <div className="section-intro"><p className="marketing-kicker">How it is built</p><h2>A working full-stack agricultural prototype.</h2><p>The repository includes the user-facing application, API services, local persistence, recommendation logic, and a path toward trained machine-learning and live integrations.</p></div>
+        <div className="architecture-grid">
+          <div><span>Interface</span><h3>React + Vite</h3><p>Responsive multipage workflow for registration, planning, insights, disease analysis, advisory, and saved records.</p></div>
+          <div><span>Application API</span><h3>FastAPI</h3><p>Routes for authentication, recommendations, weather, market data, chat, disease analysis, reports, and history.</p></div>
+          <div><span>Recommendation</span><h3>Rules + scikit-learn</h3><p>A transparent local scoring fallback plus a trainable model pipeline using regional crop data.</p></div>
+          <div><span>Storage</span><h3>SQLite</h3><p>Prototype persistence for farmer accounts and saved recommendation history.</p></div>
+        </div>
+      </section>
+
+      <section className="project-scope">
+        <div><p className="marketing-kicker">Current scope</p><h2>A strong prototype, not a promise of guaranteed outcomes.</h2></div>
+        <ul><li><CheckCircle2 size={18} /> Functional browser-only fallbacks when backend services are unavailable</li><li><CheckCircle2 size={18} /> Prepared adapters for soil, weather, market, chatbot, and disease services</li><li><CheckCircle2 size={18} /> Clear production roadmap for validated datasets, trained models, and official feeds</li></ul>
+      </section>
+
+      <MarketingCTA navigate={navigate} />
+    </>
+  );
+}
+
+function MarketingCard({ icon: Icon, label, title, text }) {
+  return <article className="marketing-card"><span className="marketing-icon"><Icon size={22} /></span><small>{label}</small><h3>{title}</h3><p>{text}</p></article>;
+}
+
+function MarketingCTA({ navigate }) {
+  return <section className="marketing-cta"><div><p className="marketing-kicker">Ready to explore?</p><h2>Build your first farm plan in minutes.</h2><p>Create a profile, add the conditions you know, and review a complete recommendation.</p></div><button className="marketing-primary light" onClick={() => navigate('/register')}>Create your account <span>→</span></button></section>;
+}
+
+function PublicFooter({ navigate }) {
+  return <footer className="public-footer"><button className="public-brand" onClick={() => navigate('/')}><span className="public-brand-mark"><Wheat size={20} /></span><span><strong>Annapurna AI</strong><small>Farm intelligence</small></span></button><p>Decision support for sustainable and informed agriculture.</p><div><button onClick={() => navigate('/')}>Home</button><button onClick={() => navigate('/about')}>About</button><button onClick={() => navigate('/login')}>Sign in</button></div></footer>;
+}
+
 function AuthScreen({ mode, farm, password, update, setPassword, onSubmit, navigate, status }) {
   const isRegister = mode === 'register';
   return (
     <main className="auth-shell">
       <section className="auth-story">
-        <button className="auth-brand" onClick={() => navigate('/dashboard')}>
+        <button className="auth-brand" onClick={() => navigate('/')}>
           <span className="brand-mark"><Wheat size={23} /></span>
           <span><small>ANNAPURNA AI</small><strong>Farm intelligence</strong></span>
         </button>
