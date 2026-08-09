@@ -11,11 +11,13 @@ import {
   Database,
   Download,
   Droplets,
+  Home,
   History,
   IndianRupee,
   Leaf,
   LineChart,
   Lock,
+  LogOut,
   MapPin,
   MessageSquareText,
   Save,
@@ -292,6 +294,7 @@ function scoreCrop(crop, farm) {
 }
 
 function App() {
+  const [route, setRoute] = useState(() => window.location.pathname === '/' ? '/dashboard' : window.location.pathname);
   const [farm, setFarm] = useState(initialFarm);
   const [authUser, setAuthUser] = useState(null);
   const [authPassword, setAuthPassword] = useState('secret123');
@@ -335,7 +338,16 @@ function App() {
   useEffect(() => {
     loadHistory();
     loadIntegrationStatus();
+    const handleRoute = () => setRoute(window.location.pathname === '/' ? '/dashboard' : window.location.pathname);
+    window.addEventListener('popstate', handleRoute);
+    return () => window.removeEventListener('popstate', handleRoute);
   }, []);
+
+  function navigate(path) {
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setRoute(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   function update(field, value) {
     setFarm((current) => ({ ...current, [field]: value }));
@@ -363,9 +375,11 @@ function App() {
       const data = await response.json();
       setAuthUser(data.user);
       setApiStatus('Account registered');
+      navigate('/dashboard');
     } catch (error) {
       setAuthUser({ name: farm.farmerName, phone: farm.phone, language: farm.language, location: farm.location });
       setApiStatus('Demo account active locally');
+      navigate('/dashboard');
     }
   }
 
@@ -387,6 +401,7 @@ function App() {
         location: data.user.location
       }));
       setApiStatus('Logged in with backend account');
+      navigate('/dashboard');
     } catch (error) {
       setApiStatus('Login failed or backend offline');
     }
@@ -566,237 +581,221 @@ function App() {
     }
   }
 
+  if (route === '/register' || route === '/login') {
+    return (
+      <AuthScreen
+        mode={route === '/register' ? 'register' : 'login'}
+        farm={farm}
+        password={authPassword}
+        update={update}
+        setPassword={setAuthPassword}
+        onSubmit={route === '/register' ? registerUser : loginUser}
+        navigate={navigate}
+        status={apiStatus}
+      />
+    );
+  }
+
+  const navItems = [
+    ['/dashboard', 'Overview', Home],
+    ['/planner', 'Crop planner', Sprout],
+    ['/insights', 'Insights', BarChart3],
+    ['/disease', 'Disease scan', Camera],
+    ['/advisor', 'AI advisor', Bot],
+    ['/records', 'Saved plans', History],
+    ['/settings', 'System', Settings]
+  ];
+
+  const pageMeta = {
+    '/dashboard': ['Farm overview', 'Your current season, recommendation, and field signals at a glance.'],
+    '/planner': ['Crop planner', 'Enter farm conditions and compare the strongest crop matches.'],
+    '/insights': ['Field insights', 'Understand the agronomy, economics, weather, and sustainability behind the recommendation.'],
+    '/disease': ['Disease analysis', 'Upload a crop image and receive an initial advisory.'],
+    '/advisor': ['AI farm advisor', 'Ask questions using your current crop and field conditions.'],
+    '/records': ['Saved plans', 'Review recommendation plans saved for this farmer.'],
+    '/settings': ['System & data', 'Review integrations, safeguards, and project readiness.']
+  };
+  const currentMeta = pageMeta[route] || pageMeta['/dashboard'];
+
+  function renderPage() {
+    if (route === '/planner') return (
+      <section className="main-grid page-section">
+        <Panel title="Farm conditions" eyebrow="Step 01 / Enter data" icon={Search}>
+          <div className="form-grid">
+            <Field label="Farmer name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />
+            <Field label="Phone" value={farm.phone} onChange={(value) => update('phone', value)} />
+            <Field label="Location" value={farm.location} onChange={(value) => update('location', value)} />
+            <SelectField label="Language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />
+            <SelectField label="Season" value={farm.season} values={['Kharif', 'Rabi', 'Zaid']} onChange={(value) => update('season', value)} />
+            <SelectField label="Soil type" value={farm.soilType} values={['Alluvial', 'Black', 'Clayey', 'Loamy', 'Sandy loam']} onChange={(value) => update('soilType', value)} />
+            <RangeInput label="Land size (acre)" field="landSize" min="0.5" max="10" step="0.5" value={farm.landSize} update={update} />
+            <RangeInput label="Soil pH" field="ph" min="4" max="9" step="0.1" value={farm.ph} update={update} />
+            <RangeInput label="Nitrogen" field="nitrogen" min="0" max="100" value={farm.nitrogen} update={update} />
+            <RangeInput label="Phosphorus" field="phosphorus" min="0" max="100" value={farm.phosphorus} update={update} />
+            <RangeInput label="Potassium" field="potassium" min="0" max="100" value={farm.potassium} update={update} />
+            <RangeInput label="Temperature (C)" field="temperature" min="5" max="45" value={farm.temperature} update={update} />
+            <RangeInput label="Humidity (%)" field="humidity" min="10" max="100" value={farm.humidity} update={update} />
+            <RangeInput label="Rainfall (mm)" field="rainfall" min="0" max="300" value={farm.rainfall} update={update} />
+            <RangeInput label="Budget (INR)" field="budget" min="5000" max="150000" step="1000" value={farm.budget} update={update} />
+            <SelectField label="Priority" value={farm.marketPriority} values={['Balanced', 'Profit', 'Sustainability', 'Water saving']} onChange={(value) => update('marketPriority', value)} />
+          </div>
+        </Panel>
+        <Panel title="Best crop matches" eyebrow="Step 02 / Compare" icon={BarChart3}>
+          <div className="crop-list">{recommendations.slice(0, 4).map((crop) => <CropCard crop={crop} key={crop.name} />)}</div>
+          <button className="primary-action save-recommendation" onClick={savePlan}><Save size={18} /> Save this plan</button>
+        </Panel>
+      </section>
+    );
+
+    if (route === '/insights') return (
+      <section className="module-grid page-section">
+        <Panel title={`${topCrop.name} advisory`} eyebrow="Decision support" icon={Leaf}>
+          <div className="advice-list"><p>{topCrop.advisory}</p><p>{topCrop.rotation}</p><p>{topCrop.sustainability}</p></div>
+        </Panel>
+        <Panel title="Yield and profit" eyebrow="Economics" icon={LineChart}>
+          <div className="kpi-row"><Metric icon={Wheat} label="Estimated yield" value={`${topCrop.expectedYield} quintal`} /><Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} /></div>
+          <p className="panel-copy">Estimate uses crop profile, land size, suitability, and budget readiness.</p>
+        </Panel>
+        <Panel title="Weather readiness" eyebrow={weather.source} icon={CloudSun}>
+          <div className="kpi-row"><Metric icon={CloudSun} label="Temperature" value={`${weather.temperature} C`} /><Metric icon={Droplets} label="Humidity" value={`${weather.humidity}%`} /></div>
+          <p className="alert-line">{weather.alert}</p>
+        </Panel>
+      </section>
+    );
+
+    if (route === '/disease') return (
+      <section className="feature-layout page-section">
+        <Panel title="Upload crop image" eyebrow="Computer vision" icon={Camera}>
+          <label className="upload-box large-upload"><Upload size={28} /><span>{imageName || 'Choose a clear leaf image for diagnosis'}</span><input type="file" accept="image/*" onChange={handleImage} /></label>
+          <div className="diagnosis"><strong>{imageName ? 'Analysis result' : 'Before you upload'}</strong><p>{imageName ? diseaseAdvisory : 'Use a well-lit image with one affected leaf in focus. This result is advisory and should be verified locally.'}</p></div>
+        </Panel>
+        <Panel title="Current crop context" eyebrow="Used in analysis" icon={Leaf}>
+          <Metric icon={Wheat} label="Crop" value={topCrop.name} />
+          <StatusLine text={`${farm.location} / ${farm.season}`} />
+          <StatusLine text={`${farm.humidity}% humidity / ${farm.rainfall} mm rainfall`} />
+          <StatusLine text="Farmer confirmation recommended before treatment" />
+        </Panel>
+      </section>
+    );
+
+    if (route === '/advisor') return (
+      <section className="advisor-layout page-section">
+        <Panel title="Conversation" eyebrow={`${farm.language} advisory`} icon={MessageSquareText}>
+          <div className="chat-window expanded-chat">{chat.map((item, index) => <div className={item.by === 'Annapurna AI' ? 'chat-bubble ai' : 'chat-bubble'} key={`${item.by}-${index}`}><strong>{item.by}</strong><span>{item.text}</span></div>)}</div>
+          <div className="chat-input"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && question.trim() && askBot()} placeholder="Ask about irrigation, fertilizer, disease, or market planning" /><button onClick={askBot} disabled={!question.trim()}><Bot size={18} /> Ask advisor</button></div>
+        </Panel>
+        <Panel title="Advisor context" eyebrow="Live farm profile" icon={Database}>
+          <StatusLine text={`Top crop: ${topCrop.name} (${topCrop.suitability}%)`} />
+          <StatusLine text={`Soil: ${farm.soilType}, pH ${farm.ph}`} />
+          <StatusLine text={`Season: ${farm.season}`} />
+          <StatusLine text={`Priority: ${farm.marketPriority}`} />
+        </Panel>
+      </section>
+    );
+
+    if (route === '/records') return (
+      <section className="page-section records-page">
+        <Panel title="Recommendation history" eyebrow="Saved plans" icon={History}>
+          {history.length === 0 ? <div className="empty-records"><History size={30} /><h3>No saved plans yet</h3><p>Complete the crop planner and save a recommendation to build your farm record.</p><button className="primary-action" onClick={() => navigate('/planner')}>Open crop planner</button></div> : <div className="history-list records-list">{history.map((item) => <div className="history-item" key={item.id}><div><strong>{item.crop}</strong><span>{item.location} · {item.date}</span></div><p>{item.score}% match</p></div>)}</div>}
+        </Panel>
+      </section>
+    );
+
+    if (route === '/settings') return (
+      <section className="module-grid page-section">
+        <Panel title="Data sources" eyebrow="Integration status" icon={Database}>
+          <StatusLine text={apiStatus} /><StatusLine text={`SoilGrids: ${integrationStatus?.soilgrids || 'checking'}`} /><StatusLine text={`ISRO Bhuvan: ${integrationStatus?.isro_bhuvan || 'checking'}`} /><StatusLine text={`OpenWeatherMap: ${integrationStatus?.openweather || 'checking'}`} /><StatusLine text={`Market feeds: ${integrationStatus ? `${integrationStatus.agmarknet}/${integrationStatus.enam}` : 'checking'}`} />
+        </Panel>
+        <Panel title="Operations" eyebrow="Account & data" icon={Settings}>
+          <div className="admin-actions"><button className="secondary-action" onClick={syncBackend}><Database size={18} /> Sync recommendations</button><button className="secondary-action" onClick={loadIntegrationStatus}><Activity size={18} /> Refresh integrations</button><button className="secondary-action" onClick={exportReport}><Download size={18} /> Export current report</button></div>
+        </Panel>
+        <Panel title="Safety & ethics" eyebrow="Advisory safeguards" icon={ShieldCheck}>
+          <StatusLine text="Farmer consent for profile and image data" /><StatusLine text="Recommendations are advisory, not guaranteed outcomes" /><StatusLine text="API keys remain in the backend environment" /><StatusLine text="Local verification recommended before treatment" />
+        </Panel>
+      </section>
+    );
+
+    return (
+      <>
+        <section className="dashboard-hero">
+          <div className="dashboard-copy"><p className="eyebrow">{farm.season} season workspace</p><h2>Good decisions begin with a clear field picture.</h2><p className="subhead">Your strongest match is <strong>{topCrop.name}</strong>. Review the current signals or update the planner as conditions change.</p><div className="action-row"><button className="primary-action" onClick={() => navigate('/planner')}><Sprout size={18} /> Plan a crop</button><button className="secondary-action" onClick={() => navigate('/advisor')}><Bot size={18} /> Ask advisor</button></div></div>
+          <FieldMap crop={topCrop} moisture={farm.humidity} />
+        </section>
+        <section className="status-grid dashboard-metrics"><Metric icon={BarChart3} label="Top recommendation" value={`${topCrop.name} · ${topCrop.suitability}%`} /><Metric icon={MapPin} label="Farm location" value={farm.location} /><Metric icon={CloudSun} label="Field weather" value={`${farm.temperature} C · ${farm.humidity}%`} /><Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} /></section>
+        <section className="quick-grid">
+          <QuickAction icon={Sprout} title="Update crop plan" text="Compare crops using soil, weather, budget, and season." onClick={() => navigate('/planner')} />
+          <QuickAction icon={Leaf} title="Review advisory" text={`${topCrop.name} guidance, yield, profit, and sustainability.`} onClick={() => navigate('/insights')} />
+          <QuickAction icon={Camera} title="Check crop health" text="Upload a leaf image for an initial disease advisory." onClick={() => navigate('/disease')} />
+        </section>
+      </>
+    );
+  }
+
   return (
-    <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">
-            <Wheat size={24} />
-          </div>
-          <div>
-            <p className="brand-kicker">ANNAPURNA / OS</p>
-            <h1>Field command</h1>
-          </div>
-        </div>
-
-        <div className="system-status"><span /> Decision engine online</div>
-
-        <nav className="nav-list" aria-label="Primary">
-          <a className="nav-item active" href="#planner"><Sprout size={18} /> <span><small>01</small> Crop planner</span></a>
-          <a className="nav-item" href="#insights"><BarChart3 size={18} /> <span><small>02</small> Field insights</span></a>
-          <a className="nav-item" href="#disease"><Camera size={18} /> <span><small>03</small> Disease scan</span></a>
-          <a className="nav-item" href="#chatbot"><Bot size={18} /> <span><small>04</small> Ask advisor</span></a>
-          <a className="nav-item" href="#sources"><Database size={18} /> <span><small>05</small> System data</span></a>
-          <a className="nav-item" href="#admin"><Settings size={18} /> <span><small>06</small> Operations</span></a>
+    <main className="app-shell saas-shell">
+      <aside className="sidebar saas-sidebar">
+        <button className="brand brand-button" onClick={() => navigate('/dashboard')}>
+          <div className="brand-mark"><Wheat size={22} /></div>
+          <div><p className="brand-kicker">ANNAPURNA AI</p><h1>Farm intelligence</h1></div>
+        </button>
+        <nav className="nav-list" aria-label="Application navigation">
+          {navItems.map(([path, label, Icon]) => <button className={`nav-item ${route === path ? 'active' : ''}`} onClick={() => navigate(path)} key={path}><Icon size={18} /><span>{label}</span></button>)}
         </nav>
-
-        <div className="sidebar-note">
-          <ShieldCheck size={18} />
-          <span><strong>Advisory system</strong>Verify local conditions before acting on a recommendation.</span>
-        </div>
+        <div className="sidebar-profile"><div className="avatar">{(authUser?.name || farm.farmerName).charAt(0)}</div><div><strong>{authUser?.name || farm.farmerName}</strong><span>{farm.location}</span></div><button aria-label="Sign out" onClick={() => { setAuthUser(null); navigate('/login'); }}><LogOut size={17} /></button></div>
       </aside>
-
-      <section className="workspace">
-        <header className="hero-console">
-          <div className="window-titlebar">
-            <div className="title-ornament" aria-hidden="true"><span /></div>
-            <strong>ANNAPURNA / FIELD SYSTEM</strong>
-            <span className="window-mode">LIVE ADVISORY</span>
-          </div>
-          <div className="hero-body">
-            <div className="hero-copy">
-              <p className="eyebrow">Crop intelligence / {farm.season} season</p>
-              <h2>Make the next field decision with confidence.</h2>
-              <p className="subhead">Enter what you know about your farm. Annapurna compares soil, weather, water and budget to produce a clear crop plan.</p>
-              <div className="action-row">
-                <a className="primary-action" href="#planner"><Search size={18} /> Start planning</a>
-                <button className="secondary-action compact" onClick={syncBackend}><Database size={18} /> Sync data</button>
-                <button className="secondary-action compact" onClick={exportReport}><Download size={18} /> Export</button>
-              </div>
-            </div>
-            <FieldMap crop={topCrop} moisture={farm.humidity} />
-          </div>
-        </header>
-
-        <section className="status-grid">
-          <Metric icon={UserRound} label="Farmer" value={authUser?.name || farm.farmerName} />
-          <Metric icon={MapPin} label="Location" value={farm.location} />
-          <Metric icon={CalendarDays} label="Season" value={farm.season} />
-          <Metric icon={IndianRupee} label="Budget" value={`INR ${Number(farm.budget).toLocaleString('en-IN')}`} />
-        </section>
-
-        <section className="account-strip window-panel">
-          <div>
-            <p className="eyebrow">User management</p>
-            <h3>{authUser ? `Session: ${authUser.name}` : 'Farmer account access'}</h3>
-          </div>
-          <div className="account-controls">
-            <input
-              type="password"
-              value={authPassword}
-              onChange={(event) => setAuthPassword(event.target.value)}
-              placeholder="Password"
-            />
-            <button className="secondary-action compact" onClick={registerUser}><UserRound size={18} /> Register</button>
-            <button className="primary-action" onClick={loginUser}><Lock size={18} /> Login</button>
-          </div>
-        </section>
-
-        <section className="main-grid" id="planner">
-          <Panel title="Farm conditions" eyebrow="Step 01 / Enter data" icon={Search}>
-            <div className="form-grid">
-              <Field label="Farmer name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />
-              <Field label="Phone" value={farm.phone} onChange={(value) => update('phone', value)} />
-              <Field label="Location" value={farm.location} onChange={(value) => update('location', value)} />
-              <SelectField label="Language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />
-              <SelectField label="Season" value={farm.season} values={['Kharif', 'Rabi', 'Zaid']} onChange={(value) => update('season', value)} />
-              <SelectField label="Soil type" value={farm.soilType} values={['Alluvial', 'Black', 'Clayey', 'Loamy', 'Sandy loam']} onChange={(value) => update('soilType', value)} />
-              <RangeInput label="Land size acre" field="landSize" min="0.5" max="10" step="0.5" value={farm.landSize} update={update} />
-              <RangeInput label="Soil pH" field="ph" min="4" max="9" step="0.1" value={farm.ph} update={update} />
-              <RangeInput label="Nitrogen" field="nitrogen" min="0" max="100" value={farm.nitrogen} update={update} />
-              <RangeInput label="Phosphorus" field="phosphorus" min="0" max="100" value={farm.phosphorus} update={update} />
-              <RangeInput label="Potassium" field="potassium" min="0" max="100" value={farm.potassium} update={update} />
-              <RangeInput label="Temperature C" field="temperature" min="5" max="45" value={farm.temperature} update={update} />
-              <RangeInput label="Humidity percent" field="humidity" min="10" max="100" value={farm.humidity} update={update} />
-              <RangeInput label="Rainfall mm" field="rainfall" min="0" max="300" value={farm.rainfall} update={update} />
-              <RangeInput label="Budget INR" field="budget" min="5000" max="150000" step="1000" value={farm.budget} update={update} />
-              <SelectField label="Priority" value={farm.marketPriority} values={['Balanced', 'Profit', 'Sustainability', 'Water saving']} onChange={(value) => update('marketPriority', value)} />
-            </div>
-          </Panel>
-
-          <Panel title="Best crop matches" eyebrow="Step 02 / Review result" icon={BarChart3}>
-            <div className="crop-list">
-              {recommendations.slice(0, 4).map((crop) => (
-                <CropCard crop={crop} key={crop.name} />
-              ))}
-            </div>
-            <button className="primary-action save-recommendation" onClick={savePlan}><Save size={18} /> Save this plan</button>
-          </Panel>
-        </section>
-
-        <section className="module-grid" id="insights">
-          <Panel title={`${topCrop.name} Advisory`} eyebrow="Decision support" icon={Leaf}>
-            <div className="advice-list">
-              <p>{topCrop.advisory}</p>
-              <p>{topCrop.rotation}</p>
-              <p>{topCrop.sustainability}</p>
-            </div>
-          </Panel>
-
-          <Panel title="Yield and Profit" eyebrow="Economics" icon={LineChart}>
-            <div className="kpi-row">
-              <Metric icon={Wheat} label="Estimated yield" value={`${topCrop.expectedYield} quintal`} />
-              <Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} />
-            </div>
-            <p className="panel-copy">Current estimate uses crop profile, land size, and budget readiness. Backend can later replace this with live market data.</p>
-          </Panel>
-
-          <Panel title="Weather" eyebrow={weather.source} icon={CloudSun}>
-            <div className="kpi-row">
-              <Metric icon={CloudSun} label="Temperature" value={`${weather.temperature} C`} />
-              <Metric icon={Droplets} label="Humidity" value={`${weather.humidity}%`} />
-            </div>
-            <p className="alert-line">{weather.alert}</p>
-          </Panel>
-        </section>
-
-        <section className="module-grid">
-          <Panel title="Crop Disease Detection" eyebrow="Computer vision module" icon={Camera} id="disease">
-            <label className="upload-box">
-              <Upload size={22} />
-              <span>{imageName || 'Upload a leaf image for prototype diagnosis'}</span>
-              <input type="file" accept="image/*" onChange={handleImage} />
-            </label>
-            <div className="diagnosis">
-              <strong>{imageName ? 'Prototype result' : 'Model status'}</strong>
-              <p>{imageName ? diseaseAdvisory : 'Frontend is ready. Backend route accepts image upload and returns a disease advisory.'}</p>
-            </div>
-          </Panel>
-
-          <Panel title="Multilingual Chatbot" eyebrow="Natural language advisory" icon={MessageSquareText} id="chatbot">
-            <div className="chat-window">
-              {chat.slice(-4).map((item, index) => (
-                <div className={item.by === 'Annapurna AI' ? 'chat-bubble ai' : 'chat-bubble'} key={`${item.by}-${index}`}>
-                  <strong>{item.by}</strong>
-                  <span>{item.text}</span>
-                </div>
-              ))}
-            </div>
-            <div className="chat-input">
-              <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask crop, irrigation, fertilizer, or disease question" />
-              <button onClick={askBot} disabled={!question.trim()}><Bot size={18} /> Ask</button>
-            </div>
-          </Panel>
-
-          <Panel title="Saved History" eyebrow="Farmer records" icon={History}>
-            {history.length === 0 ? (
-              <p className="empty-state">Save a plan to create recommendation history.</p>
-            ) : (
-              <div className="history-list">
-                {history.map((item) => (
-                  <div className="history-item" key={item.id}>
-                    <div>
-                      <strong>{item.crop}</strong>
-                      <span>{item.location}</span>
-                    </div>
-                    <p>{item.score}%</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Panel>
-        </section>
-
-        <section className="module-grid bottom-grid" id="sources">
-          <Panel title="Data Sources" eyebrow="Integration map" icon={Database}>
-            <StatusLine text={apiStatus} />
-            <StatusLine text={`SoilGrids: ${integrationStatus?.soilgrids || 'checking'}`} />
-            <StatusLine text={`ISRO Bhuvan: ${integrationStatus?.isro_bhuvan || 'checking'}`} />
-            <StatusLine text={`OpenWeatherMap: ${integrationStatus?.openweather || 'checking'}`} />
-            <StatusLine text={`Agmarknet/eNAM: ${integrationStatus ? `${integrationStatus.agmarknet}/${integrationStatus.enam}` : 'checking'}`} />
-            <StatusLine text="SQLite prototype storage for saved farmer history" />
-          </Panel>
-
-          <Panel title="Model Pipeline" eyebrow="Implementation plan" icon={Activity}>
-            <StatusLine text="Crop recommendation model with scikit-learn" />
-            <StatusLine text="Image disease classifier route prepared" />
-            <StatusLine text="Generative AI chatbot route prepared" />
-            <StatusLine text="Docker/cloud deployment ready after backend completion" />
-          </Panel>
-
-          <Panel title="Security and Ethics" eyebrow="Project compliance" icon={Lock}>
-            <StatusLine text="Use clear farmer consent for profile and image data" />
-            <StatusLine text="Show recommendations as advisory, not guaranteed outcomes" />
-            <StatusLine text="Keep API keys in backend environment variables" />
-            <StatusLine text="Explain data sources in project report and defense" />
-          </Panel>
-        </section>
-
-        <section className="module-grid bottom-grid" id="admin">
-          <Panel title="Admin Console" eyebrow="Operations" icon={Settings}>
-            <div className="admin-actions">
-              <button className="secondary-action" onClick={loadIntegrationStatus}><Database size={18} /> Refresh integrations</button>
-              <button className="secondary-action" onClick={loadHistory}><History size={18} /> Refresh history</button>
-              <button className="secondary-action" onClick={exportReport}><Download size={18} /> Export report</button>
-            </div>
-          </Panel>
-
-          <Panel title="Project Deliverables" eyebrow="Proposal coverage" icon={CheckCircle2}>
-            <StatusLine text="Web dashboard and mobile responsive PWA" />
-            <StatusLine text="User account, crop recommendation, history, chatbot, disease upload" />
-            <StatusLine text="FastAPI backend, SQLite storage, scikit-learn model pipeline" />
-            <StatusLine text="Docker Compose deployment files" />
-          </Panel>
-
-          <Panel title="Live Readiness" eyebrow="External dependencies" icon={Activity}>
-            <StatusLine text="Add API keys in .env for live weather and GenAI" />
-            <StatusLine text="Replace starter crop dataset with validated regional data" />
-            <StatusLine text="Train disease classifier with labelled crop images" />
-            <StatusLine text="Use official market feeds before production claims" />
-          </Panel>
-        </section>
+      <section className="workspace saas-workspace">
+        <header className="app-topbar"><div><p className="eyebrow">Annapurna workspace</p><h2>{currentMeta[0]}</h2><p>{currentMeta[1]}</p></div><div className="topbar-actions"><span className="live-pill"><i /> Advisory online</span><button className="secondary-action" onClick={exportReport}><Download size={17} /> Report</button></div></header>
+        <div className="page-content">{renderPage()}</div>
       </section>
     </main>
+  );
+}
+
+function AuthScreen({ mode, farm, password, update, setPassword, onSubmit, navigate, status }) {
+  const isRegister = mode === 'register';
+  return (
+    <main className="auth-shell">
+      <section className="auth-story">
+        <button className="auth-brand" onClick={() => navigate('/dashboard')}>
+          <span className="brand-mark"><Wheat size={23} /></span>
+          <span><small>ANNAPURNA AI</small><strong>Farm intelligence</strong></span>
+        </button>
+        <div className="auth-story-copy">
+          <p className="eyebrow">Built for better farm decisions</p>
+          <h1>Technology that respects the land and the people who cultivate it.</h1>
+          <p>Bring crop planning, field signals, disease support, and practical advisory into one clear workspace.</p>
+        </div>
+        <div className="auth-trust"><ShieldCheck size={19} /><span>Your recommendations remain advisory and transparent.</span></div>
+      </section>
+      <section className="auth-form-side">
+        <form className="auth-card" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+          <p className="eyebrow">{isRegister ? 'Create your workspace' : 'Welcome back'}</p>
+          <h2>{isRegister ? 'Register your farm' : 'Sign in to Annapurna'}</h2>
+          <p className="auth-intro">{isRegister ? 'Set up your farmer profile to receive recommendations relevant to your farm.' : 'Continue to your crop plans, field insights, and saved recommendations.'}</p>
+          <div className="auth-fields">
+            {isRegister && <Field label="Full name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />}
+            <Field label="Phone number" value={farm.phone} onChange={(value) => update('phone', value)} />
+            {isRegister && <Field label="Farm location" value={farm.location} onChange={(value) => update('location', value)} />}
+            {isRegister && <SelectField label="Preferred language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />}
+            <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="6" required /></label>
+          </div>
+          {isRegister && <label className="consent-row"><input type="checkbox" required /><span>I consent to using my farm details to generate advisory recommendations.</span></label>}
+          <button className="primary-action auth-submit" type="submit"><UserRound size={18} /> {isRegister ? 'Create farm account' : 'Sign in'}</button>
+          <p className="auth-switch">{isRegister ? 'Already have an account?' : 'New to Annapurna?'} <button type="button" onClick={() => navigate(isRegister ? '/login' : '/register')}>{isRegister ? 'Sign in' : 'Create an account'}</button></p>
+          <p className="auth-status">{status}</p>
+        </form>
+      </section>
+    </main>
+  );
+}
+
+function QuickAction({ icon: Icon, title, text, onClick }) {
+  return (
+    <button className="quick-action" onClick={onClick}>
+      <span className="quick-icon"><Icon size={21} /></span>
+      <span><strong>{title}</strong><small>{text}</small></span>
+      <span className="quick-arrow">→</span>
+    </button>
   );
 }
 
