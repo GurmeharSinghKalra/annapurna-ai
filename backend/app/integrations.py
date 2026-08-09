@@ -11,9 +11,9 @@ def integration_status() -> dict:
         "openweather": "configured" if settings.openweather_api_key else "missing_api_key",
         "agmarknet": "configured" if settings.agmarknet_source_url else "placeholder_dataset",
         "enam": "configured" if settings.enam_source_url else "placeholder_dataset",
-        "genai": "configured"
-        if (settings.openrouter_api_key or settings.gemini_api_key)
-        else "local_advisory_fallback",
+        "gemini": "configured" if settings.gemini_api_key else "missing_api_key",
+        "gemini_model": settings.gemini_model,
+        "genai": "gemini" if settings.gemini_api_key else "local_advisory_fallback",
     }
 
 

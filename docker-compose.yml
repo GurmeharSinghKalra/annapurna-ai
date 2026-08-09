@@ -4,8 +4,8 @@ services:
       context: ./backend
     environment:
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       AGMARKNET_SOURCE_URL: ${AGMARKNET_SOURCE_URL:-}
       ENAM_SOURCE_URL: ${ENAM_SOURCE_URL:-}
     ports:

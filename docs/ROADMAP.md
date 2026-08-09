@@ -10,8 +10,8 @@ Completed:
 - Farmer accounts
 - Recommendation history
 - Report export
-- Chatbot fallback
-- Disease upload prototype
+- Gemini advisor with local fallback
+- Gemini multimodal disease screening with local fallback
 - Admin/status panel
 - PWA and Docker setup
 
@@ -27,7 +27,7 @@ Completed:
 - Connect OpenWeatherMap.
 - Connect Agmarknet/eNAM or curated price feeds.
 - Connect SoilGrids/ISRO Bhuvan data lookup.
-- Connect Gemini/OpenRouter for full natural language advisory.
+- Evaluate Gemini responses with agriculture experts and multilingual farmer testing.
 
 ## Phase 4: Disease Detection
 

@@ -19,7 +19,7 @@ Farmers often lack localized, data-driven guidance for crop selection. Generic a
 7. Register/login a farmer.
 8. Save a plan and show history.
 9. Export a report.
-10. Show chatbot and disease image upload prototype.
+10. Show the Gemini advisor and Gemini multimodal disease-screening flow.
 11. Open Admin section and explain integrations.
 
 ## Technology Stack
@@ -35,8 +35,8 @@ Farmers often lack localized, data-driven guidance for crop selection. Generic a
 
 - Weather API needs a real OpenWeatherMap key.
 - Market prices need official Agmarknet/eNAM data.
-- Chatbot can be connected to Gemini/OpenRouter with API keys.
-- Disease detection needs a labelled crop disease image dataset.
+- Gemini powers crop explanations, multilingual chat, and image screening when its backend API key is configured.
+- Gemini image screening is advisory; a validated specialist disease model and expert confirmation remain important for production.
 - The starter ML dataset is small and should be replaced with validated regional data before production.
 
 ## Strong Points

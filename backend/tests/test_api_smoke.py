@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.gemini_service import DiseaseAnalysis, RecommendationInsight, gemini_service
 
 
 client = TestClient(app)
@@ -36,6 +37,8 @@ def test_recommendations_and_history():
     assert response.status_code == 200
     recommendations = response.json()["recommendations"]
     assert recommendations
+    assert response.json()["ai_provider"] in {"gemini", "local_fallback"}
+    assert "ai_explanation" in response.json()
     assert recommendations[0]["crop"] in {"Maize", "Sugarcane", "Cotton", "Rice"}
 
     record = {
@@ -77,6 +80,7 @@ def test_chat():
     )
     assert response.status_code == 200
     assert "answer" in response.json()
+    assert response.json()["provider"] in {"gemini", "local_fallback"}
 
     hindi_response = client.post(
         "/chat",
@@ -127,6 +131,77 @@ def test_auth_and_integrations():
     status_response = client.get("/integrations/status")
     assert status_response.status_code == 200
     assert "openweather" in status_response.json()
+    assert "gemini" in status_response.json()
+    assert "gemini_model" in status_response.json()
+
+
+def test_disease_screening_fallback_or_gemini():
+    response = client.post(
+        "/disease",
+        files={"file": ("leaf.png", b"not-a-real-image-but-valid-upload-bytes", "image/png")},
+        data={"crop": "Maize"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["provider"] in {"gemini", "local_fallback"}
+    assert "prediction" in payload
+    assert "advisory" in payload
+
+
+def test_gemini_routes_return_structured_provider_metadata(monkeypatch):
+    async def fake_insight(farm, recommendations):
+        return RecommendationInsight(
+            summary="Maize matches the supplied field conditions.",
+            priority_action="Confirm drainage before sowing.",
+            risk_note="Profit remains an estimate.",
+        )
+
+    async def fake_chat(question, crop, farm, recommendation):
+        return f"Gemini answer for {crop}: {question}"
+
+    async def fake_disease(image_bytes, mime_type, crop=None):
+        return DiseaseAnalysis(
+            prediction="possible leaf spot",
+            confidence=0.81,
+            observations=["small visible lesions"],
+            advisory="Isolate affected leaves and confirm with a local expert.",
+            urgency="moderate",
+        )
+
+    monkeypatch.setattr(gemini_service, "recommendation_insight", fake_insight)
+    monkeypatch.setattr(gemini_service, "chat_answer", fake_chat)
+    monkeypatch.setattr(gemini_service, "disease_analysis", fake_disease)
+
+    farm = {
+        "location": "Sonipat, Haryana",
+        "season": "Kharif",
+        "soil_type": "Alluvial",
+        "land_size": 2,
+        "ph": 6.6,
+        "nitrogen": 62,
+        "phosphorus": 41,
+        "potassium": 48,
+        "temperature": 29,
+        "humidity": 64,
+        "rainfall": 115,
+        "budget": 35000,
+    }
+
+    recommendation_response = client.post("/recommendations", json=farm)
+    assert recommendation_response.json()["ai_provider"] == "gemini"
+    assert recommendation_response.json()["ai_explanation"]["priority_action"]
+
+    chat_response = client.post("/chat", json={"question": "How should I irrigate?", "crop": "Maize", "farm": farm})
+    assert chat_response.json()["provider"] == "gemini"
+    assert "How should I irrigate?" in chat_response.json()["answer"]
+
+    disease_response = client.post(
+        "/disease",
+        files={"file": ("leaf.png", b"image-bytes", "image/png")},
+        data={"crop": "Maize"},
+    )
+    assert disease_response.json()["provider"] == "gemini"
+    assert disease_response.json()["urgency"] == "moderate"
 
 
 def test_weather_soil_and_market():

@@ -310,6 +310,7 @@ function App() {
   const [apiStatus, setApiStatus] = useState('Backend not checked yet');
   const [integrationStatus, setIntegrationStatus] = useState(null);
   const [apiRecommendations, setApiRecommendations] = useState(null);
+  const [geminiExplanation, setGeminiExplanation] = useState(null);
   const [diseaseAdvisory, setDiseaseAdvisory] = useState('');
 
   const localRecommendations = useMemo(
@@ -352,6 +353,7 @@ function App() {
   function update(field, value) {
     setFarm((current) => ({ ...current, [field]: value }));
     setApiRecommendations(null);
+    setGeminiExplanation(null);
   }
 
   async function registerUser() {
@@ -439,7 +441,9 @@ function App() {
         openweather: 'offline',
         agmarknet: 'offline',
         enam: 'offline',
-        genai: 'offline'
+        gemini: 'backend_offline',
+        gemini_model: 'gemini-2.5-flash',
+        genai: 'local_advisory_fallback'
       });
     }
   }
@@ -526,9 +530,11 @@ function App() {
       const data = await response.json();
       const normalized = (data.recommendations || []).map(normalizeRecommendation);
       setApiRecommendations(normalized.length ? normalized : null);
+      setGeminiExplanation(data.ai_explanation || null);
       const top = normalized[0];
-      setApiStatus(top ? `Backend online: ${top.name} ${top.suitability}%` : 'Backend online');
+      setApiStatus(top ? `${data.ai_provider === 'gemini' ? 'Gemini explanation ready' : 'Local ranking ready'}: ${top.name} ${top.suitability}%` : 'Backend online');
     } catch (error) {
+      setGeminiExplanation(null);
       setApiStatus('Backend offline: run FastAPI on port 8000');
     }
   }
@@ -551,7 +557,7 @@ function App() {
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
       setChat((items) => [...items, { by: 'Annapurna AI', text: data.answer }]);
-      setApiStatus('Chatbot API online');
+      setApiStatus(data.provider === 'gemini' ? 'Gemini advisor online' : 'Local advisor fallback used');
     } catch (error) {
       const answer = `${topCrop.name} is currently the strongest match. ${topCrop.advisory} ${topCrop.rotation} Expected return is INR ${topCrop.expectedProfit.toLocaleString('en-IN')} for ${farm.landSize} acre.`;
       setChat((items) => [...items, { by: 'Annapurna AI', text: answer }]);
@@ -567,14 +573,16 @@ function App() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('crop', topCrop.name);
       const response = await fetch('http://127.0.0.1:8000/disease', {
         method: 'POST',
         body: formData
       });
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
-      setDiseaseAdvisory(`${data.prediction}: ${data.advisory}`);
-      setApiStatus('Disease API online');
+      const confidence = Number.isFinite(data.confidence) ? ` · ${Math.round(data.confidence * 100)}% confidence` : '';
+      setDiseaseAdvisory(`${data.prediction}${confidence}: ${data.advisory}`);
+      setApiStatus(data.provider === 'gemini' ? 'Gemini visual analysis complete' : 'Disease fallback used');
     } catch (error) {
       setDiseaseAdvisory(diseaseResults[topCrop.name]);
       setApiStatus('Disease fallback used');
@@ -646,7 +654,8 @@ function App() {
         </Panel>
         <Panel title="Best crop matches" eyebrow="Step 02 / Compare" icon={BarChart3}>
           <div className="crop-list">{recommendations.slice(0, 4).map((crop) => <CropCard crop={crop} key={crop.name} />)}</div>
-          <button className="primary-action save-recommendation" onClick={savePlan}><Save size={18} /> Save this plan</button>
+          {geminiExplanation && <div className="gemini-insight"><div><Bot size={18} /><strong>Gemini explanation</strong></div><p>{geminiExplanation.summary}</p><span><b>Next:</b> {geminiExplanation.priority_action}</span><span><b>Watch:</b> {geminiExplanation.risk_note}</span></div>}
+          <div className="planner-actions"><button className="secondary-action" onClick={syncBackend}><Bot size={18} /> Explain with Gemini</button><button className="primary-action" onClick={savePlan}><Save size={18} /> Save this plan</button></div>
         </Panel>
       </section>
     );
@@ -669,7 +678,7 @@ function App() {
 
     if (route === '/disease') return (
       <section className="feature-layout page-section">
-        <Panel title="Upload crop image" eyebrow="Computer vision" icon={Camera}>
+        <Panel title="Upload crop image" eyebrow="Gemini multimodal screening" icon={Camera}>
           <label className="upload-box large-upload"><Upload size={28} /><span>{imageName || 'Choose a clear leaf image for diagnosis'}</span><input type="file" accept="image/*" onChange={handleImage} /></label>
           <div className="diagnosis"><strong>{imageName ? 'Analysis result' : 'Before you upload'}</strong><p>{imageName ? diseaseAdvisory : 'Use a well-lit image with one affected leaf in focus. This result is advisory and should be verified locally.'}</p></div>
         </Panel>
@@ -684,7 +693,7 @@ function App() {
 
     if (route === '/advisor') return (
       <section className="advisor-layout page-section">
-        <Panel title="Conversation" eyebrow={`${farm.language} advisory`} icon={MessageSquareText}>
+        <Panel title="Conversation" eyebrow={`Gemini advisor / ${farm.language}`} icon={MessageSquareText}>
           <div className="chat-window expanded-chat">{chat.map((item, index) => <div className={item.by === 'Annapurna AI' ? 'chat-bubble ai' : 'chat-bubble'} key={`${item.by}-${index}`}><strong>{item.by}</strong><span>{item.text}</span></div>)}</div>
           <div className="chat-input"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && question.trim() && askBot()} placeholder="Ask about irrigation, fertilizer, disease, or market planning" /><button onClick={askBot} disabled={!question.trim()}><Bot size={18} /> Ask advisor</button></div>
         </Panel>
@@ -708,7 +717,7 @@ function App() {
     if (route === '/settings') return (
       <section className="module-grid page-section">
         <Panel title="Data sources" eyebrow="Integration status" icon={Database}>
-          <StatusLine text={apiStatus} /><StatusLine text={`SoilGrids: ${integrationStatus?.soilgrids || 'checking'}`} /><StatusLine text={`ISRO Bhuvan: ${integrationStatus?.isro_bhuvan || 'checking'}`} /><StatusLine text={`OpenWeatherMap: ${integrationStatus?.openweather || 'checking'}`} /><StatusLine text={`Market feeds: ${integrationStatus ? `${integrationStatus.agmarknet}/${integrationStatus.enam}` : 'checking'}`} />
+          <StatusLine text={apiStatus} /><StatusLine text={`Gemini AI: ${integrationStatus?.gemini || 'checking'} (${integrationStatus?.gemini_model || 'model pending'})`} /><StatusLine text={`SoilGrids: ${integrationStatus?.soilgrids || 'checking'}`} /><StatusLine text={`ISRO Bhuvan: ${integrationStatus?.isro_bhuvan || 'checking'}`} /><StatusLine text={`OpenWeatherMap: ${integrationStatus?.openweather || 'checking'}`} /><StatusLine text={`Market feeds: ${integrationStatus ? `${integrationStatus.agmarknet}/${integrationStatus.enam}` : 'checking'}`} />
         </Panel>
         <Panel title="Operations" eyebrow="Account & data" icon={Settings}>
           <div className="admin-actions"><button className="secondary-action" onClick={syncBackend}><Database size={18} /> Sync recommendations</button><button className="secondary-action" onClick={loadIntegrationStatus}><Activity size={18} /> Refresh integrations</button><button className="secondary-action" onClick={exportReport}><Download size={18} /> Export current report</button></div>
@@ -789,7 +798,7 @@ function LandingPage({ navigate }) {
         <div className="landing-copy">
           <p className="marketing-kicker"><span /> Practical AI for Indian agriculture</p>
           <h1>Plan every season with a clearer view of your farm.</h1>
-          <p>Annapurna AI brings crop recommendations, field insights, disease support, and multilingual guidance into one focused workspace—so every recommendation is easier to understand and act on.</p>
+          <p>Annapurna AI combines deterministic crop ranking with Gemini-powered explanations, multimodal disease screening, and multilingual guidance—so every recommendation is easier to understand and act on.</p>
           <div className="landing-actions">
             <button className="marketing-primary" onClick={() => navigate('/register')}>Start your farm plan <span>→</span></button>
             <button className="marketing-secondary" onClick={() => navigate('/about')}>See how it works</button>
@@ -819,8 +828,8 @@ function LandingPage({ navigate }) {
         <div className="feature-cards">
           <MarketingCard icon={Sprout} label="Plan" title="Crop recommendations" text="Compare crops using season, soil, nutrients, rainfall, temperature, water, budget, and market priority." />
           <MarketingCard icon={BarChart3} label="Understand" title="Field and profit insights" text="See suitability, expected yield, estimated return, cautions, rotation advice, and sustainability guidance." />
-          <MarketingCard icon={Camera} label="Protect" title="Disease support" text="Upload a clear leaf image for an initial crop-aware advisory and a responsible next step." />
-          <MarketingCard icon={Bot} label="Ask" title="Multilingual advisor" text="Ask irrigation, fertilizer, disease, and planning questions using the current farm and crop context." />
+          <MarketingCard icon={Camera} label="Protect" title="Gemini disease support" text="Use Gemini's multimodal understanding to screen a clear leaf image and receive a cautious crop-aware advisory." />
+          <MarketingCard icon={Bot} label="Ask" title="Gemini farm advisor" text="Ask irrigation, fertilizer, disease, and planning questions using the current farm and crop context." />
         </div>
       </section>
 

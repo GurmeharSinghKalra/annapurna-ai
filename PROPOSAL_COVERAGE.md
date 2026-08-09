@@ -30,7 +30,7 @@ These are intentionally separated from the prototype because they require creden
 
 - Live OpenWeatherMap key in `OPENWEATHER_API_KEY`.
 - Official Agmarknet/eNAM source URLs or curated market dataset.
-- Gemini/OpenRouter key for real generative multilingual chatbot output.
+- Gemini API key for crop explanations, multilingual advisory, and multimodal disease screening.
 - Labelled crop disease image dataset and trained classifier.
 - Larger validated regional crop dataset for robust ML accuracy.
 

@@ -18,8 +18,8 @@ See `PROPOSAL_COVERAGE.md` for a requirement-by-requirement implementation map.
 
 - React frontend dashboard for farmer profile, soil, weather, nutrients, budget, and season inputs.
 - Crop recommendation cards with suitability, reasons, warnings, yield, profit, water need, sustainability, and crop rotation.
-- Weather, market, advisory, chatbot, disease upload, saved history, data-source, and ethics/compliance sections.
-- FastAPI backend scaffold with routes for recommendations, weather, market, chat, disease upload, and history.
+- Weather, market, Gemini advisor, Gemini multimodal disease screening, saved history, data-source, and ethics/compliance sections.
+- FastAPI backend with Gemini-powered recommendation explanations, multilingual chat, and crop-image screening.
 - SQLite prototype persistence for saved recommendation history.
 - Trainable scikit-learn crop recommendation pipeline with a starter dataset.
 - Docker Compose setup for frontend and backend.
@@ -86,6 +86,10 @@ Copy-Item .env.example .env
 
 The app works without keys using local/manual fallbacks.
 
+Set `GEMINI_API_KEY` to enable every generative or multimodal AI feature. `GEMINI_MODEL`
+defaults to `gemini-2.5-flash` and can be changed without editing source code. Keep the key
+in the backend environment only; never expose it through Vite or browser code.
+
 ## Train ML Model
 
 ```powershell
@@ -100,8 +104,8 @@ The trained artifact is written to `backend/models/crop_recommender.joblib`. The
 - Replace rule-based recommendation with a trained scikit-learn model.
 - Add OpenWeatherMap API key in backend environment variables.
 - Connect Agmarknet/eNAM or a curated market dataset.
-- Add Gemini/OpenRouter backend call for multilingual chatbot answers.
-- Train or plug in a crop leaf disease model.
+- Validate Gemini prompts and screening results with regional agriculture experts.
+- Add a trained specialist disease model when a validated labelled dataset is available.
 
 ## Verify
 

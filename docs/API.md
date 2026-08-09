@@ -89,6 +89,12 @@ POST /chat
 POST /disease
 ```
 
+`POST /recommendations` returns deterministic rankings plus an optional Gemini
+`ai_explanation`. `POST /chat` returns `provider: gemini` when Gemini answered and
+`local_fallback` otherwise. `POST /disease` accepts multipart fields `file` and optional
+`crop`, returning structured Gemini screening fields (`prediction`, `confidence`,
+`observations`, `advisory`, and `urgency`) when configured.
+
 ## History
 
 ```http

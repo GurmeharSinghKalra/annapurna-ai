@@ -49,10 +49,13 @@ Copy-Item .env.example .env
 Supported keys:
 
 - `OPENWEATHER_API_KEY`
-- `OPENROUTER_API_KEY`
 - `GEMINI_API_KEY`
+- `GEMINI_MODEL` (defaults to `gemini-2.5-flash`)
 - `AGMARKNET_SOURCE_URL`
 - `ENAM_SOURCE_URL`
+
+Gemini is used by recommendation explanations, the multilingual farm advisor, and
+multimodal crop-image screening. Leave the key empty to use deterministic local fallbacks.
 
 The app works without these values using local fallback behavior.
 

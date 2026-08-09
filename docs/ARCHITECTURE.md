@@ -16,8 +16,8 @@ The frontend provides:
 - Crop recommendation cards
 - Yield/profit/sustainability insights
 - Weather panel
-- Disease image upload panel
-- Multilingual chatbot panel
+- Gemini multimodal disease-screening panel
+- Gemini multilingual advisor panel
 - History panel
 - Data-source status panel
 - Admin console
@@ -47,7 +47,8 @@ Backend modules:
 2. Frontend can calculate local fallback recommendations immediately.
 3. Clicking Sync API sends the farm profile to `POST /recommendations`.
 4. Backend combines rule scoring with the trained scikit-learn model when available.
-5. User can save history, ask chatbot questions, upload a disease image, and export a report.
+5. Gemini explains the ranked recommendation without changing the deterministic ranking.
+6. User can save history, ask Gemini questions, upload a disease image for Gemini screening, and export a report.
 
 ## Storage
 
