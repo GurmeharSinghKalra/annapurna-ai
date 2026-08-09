@@ -574,37 +574,47 @@ function App() {
             <Wheat size={24} />
           </div>
           <div>
-            <p className="brand-kicker">Annapurna AI</p>
-            <h1>Farmer decision system</h1>
+            <p className="brand-kicker">ANNAPURNA / OS</p>
+            <h1>Field command</h1>
           </div>
         </div>
 
+        <div className="system-status"><span /> Decision engine online</div>
+
         <nav className="nav-list" aria-label="Primary">
-          <a className="nav-item active" href="#planner"><Sprout size={18} /> Planner</a>
-          <a className="nav-item" href="#insights"><BarChart3 size={18} /> Insights</a>
-          <a className="nav-item" href="#disease"><Camera size={18} /> Disease</a>
-          <a className="nav-item" href="#chatbot"><Bot size={18} /> Chatbot</a>
-          <a className="nav-item" href="#sources"><Database size={18} /> Data</a>
-          <a className="nav-item" href="#admin"><Settings size={18} /> Admin</a>
+          <a className="nav-item active" href="#planner"><Sprout size={18} /> <span><small>01</small> Crop planner</span></a>
+          <a className="nav-item" href="#insights"><BarChart3 size={18} /> <span><small>02</small> Field insights</span></a>
+          <a className="nav-item" href="#disease"><Camera size={18} /> <span><small>03</small> Disease scan</span></a>
+          <a className="nav-item" href="#chatbot"><Bot size={18} /> <span><small>04</small> Ask advisor</span></a>
+          <a className="nav-item" href="#sources"><Database size={18} /> <span><small>05</small> System data</span></a>
+          <a className="nav-item" href="#admin"><Settings size={18} /> <span><small>06</small> Operations</span></a>
         </nav>
 
         <div className="sidebar-note">
           <ShieldCheck size={18} />
-          <span>Annapurna is used as a respectful symbol of food security, nourishment, and sustainable farming.</span>
+          <span><strong>Advisory system</strong>Verify local conditions before acting on a recommendation.</span>
         </div>
       </aside>
 
       <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">AI crop recommendation and agricultural advisory</p>
-            <h2>Annapurna AI</h2>
-            <p className="subhead">Plan crops from soil, climate, market priority, sustainability, and disease signals.</p>
+        <header className="hero-console">
+          <div className="window-titlebar">
+            <div className="window-controls" aria-hidden="true"><span /><span /><span /></div>
+            <strong>ANNAPURNA_AI.EXE</strong>
+            <span className="window-mode">FIELD MODE</span>
           </div>
-          <div className="action-row">
-            <button className="secondary-action compact" onClick={syncBackend}><Database size={18} /> Sync API</button>
-            <button className="secondary-action compact" onClick={exportReport}><Download size={18} /> Report</button>
-            <button className="primary-action" onClick={savePlan}><Save size={18} /> Save plan</button>
+          <div className="hero-body">
+            <div className="hero-copy">
+              <p className="eyebrow">Crop intelligence / {farm.season} season</p>
+              <h2>Make the next field decision with confidence.</h2>
+              <p className="subhead">Enter what you know about your farm. Annapurna compares soil, weather, water and budget to produce a clear crop plan.</p>
+              <div className="action-row">
+                <a className="primary-action" href="#planner"><Search size={18} /> Start planning</a>
+                <button className="secondary-action compact" onClick={syncBackend}><Database size={18} /> Sync data</button>
+                <button className="secondary-action compact" onClick={exportReport}><Download size={18} /> Export</button>
+              </div>
+            </div>
+            <FieldScene crop={topCrop} moisture={farm.humidity} />
           </div>
         </header>
 
@@ -615,10 +625,10 @@ function App() {
           <Metric icon={IndianRupee} label="Budget" value={`INR ${Number(farm.budget).toLocaleString('en-IN')}`} />
         </section>
 
-        <section className="account-strip">
+        <section className="account-strip window-panel">
           <div>
             <p className="eyebrow">User management</p>
-            <h3>{authUser ? `Signed in as ${authUser.name}` : 'Register or login farmer account'}</h3>
+            <h3>{authUser ? `Session: ${authUser.name}` : 'Farmer account access'}</h3>
           </div>
           <div className="account-controls">
             <input
@@ -633,7 +643,7 @@ function App() {
         </section>
 
         <section className="main-grid" id="planner">
-          <Panel title="Farm Profile" eyebrow="Input data" icon={Search}>
+          <Panel title="Farm conditions" eyebrow="Step 01 / Enter data" icon={Search}>
             <div className="form-grid">
               <Field label="Farmer name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />
               <Field label="Phone" value={farm.phone} onChange={(value) => update('phone', value)} />
@@ -654,12 +664,13 @@ function App() {
             </div>
           </Panel>
 
-          <Panel title="Top Crop Recommendations" eyebrow="ML output" icon={BarChart3}>
+          <Panel title="Best crop matches" eyebrow="Step 02 / Review result" icon={BarChart3}>
             <div className="crop-list">
               {recommendations.slice(0, 4).map((crop) => (
                 <CropCard crop={crop} key={crop.name} />
               ))}
             </div>
+            <button className="primary-action save-recommendation" onClick={savePlan}><Save size={18} /> Save this plan</button>
           </Panel>
         </section>
 
@@ -786,6 +797,52 @@ function App() {
         </section>
       </section>
     </main>
+  );
+}
+
+function FieldScene({ crop, moisture }) {
+  const [view, setView] = useState({ x: 58, z: -42 });
+  const plots = Array.from({ length: 16 }, (_, index) => index);
+
+  function inspectField(event) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const horizontal = (event.clientX - bounds.left) / bounds.width - 0.5;
+    const vertical = (event.clientY - bounds.top) / bounds.height - 0.5;
+    setView({ x: 58 - vertical * 12, z: -42 + horizontal * 16 });
+  }
+
+  return (
+    <figure
+      className="field-terminal"
+      onPointerMove={inspectField}
+      onPointerLeave={() => setView({ x: 58, z: -42 })}
+      aria-label={`Interactive field model showing ${crop.name} at ${crop.suitability} percent suitability`}
+    >
+      <div className="field-readout">
+        <span>LIVE FIELD MODEL</span>
+        <strong>{crop.name.toUpperCase()} / {crop.suitability}%</strong>
+      </div>
+      <div className="scene-window">
+        <div
+          className="voxel-field"
+          style={{ '--field-x': `${view.x}deg`, '--field-z': `${view.z}deg` }}
+        >
+          {plots.map((plot) => (
+            <div className={`voxel ${plot % 5 === 0 ? 'voxel-water' : ''}`} key={plot}>
+              <span className="face face-top" />
+              <span className="face face-front" />
+              <span className="face face-right" />
+              {plot % 5 !== 0 && <i className="crop-sprout" />}
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption>
+        <span><i className="legend-dot soil" /> {crop.water} water</span>
+        <span><i className="legend-dot signal" /> {moisture}% humidity</span>
+        <span>MOVE TO INSPECT</span>
+      </figcaption>
+    </figure>
   );
 }
 
