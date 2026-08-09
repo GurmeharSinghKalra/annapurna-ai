@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.env
+.env.local
 backend/.venv/
 backend/.pytest_cache/
 backend/data/*.sqlite
