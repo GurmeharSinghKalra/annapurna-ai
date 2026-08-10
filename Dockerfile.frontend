@@ -5,12 +5,31 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY index.html ./
+# `public/` holds the manifest, icon, OG image, and service worker. Omitting it
+# shipped an image whose index.html 404ed on every one of them.
+COPY index.html vite.config.js ./
 COPY src ./src
+COPY public ./public
+
+# Baked in at build time: Vite inlines import.meta.env at compile time, so the
+# API URL cannot be supplied when the container starts.
+ARG VITE_API_URL=http://127.0.0.1:8000
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginx:1.27-alpine
 
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
+RUN chown -R nginx:nginx /usr/share/nginx/html \
+    && touch /var/run/nginx.pid \
+    && chown nginx:nginx /var/run/nginx.pid \
+    && chown -R nginx:nginx /var/cache/nginx
+
+USER nginx
+
 EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -q --spider http://127.0.0.1:80/ || exit 1

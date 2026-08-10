@@ -1,43 +1,59 @@
 # Backend module
 
-`backend/` is the FastAPI service that turns a farmer profile into a traceable crop plan. It owns account storage, history persistence, the optional scikit-learn model, Gemini integration, and adapter boundaries for weather, soil, and market services.
+`backend/` is the FastAPI service that turns a farmer profile into a traceable crop
+plan. It owns accounts and sessions, history persistence, the optional scikit-learn
+model, the Gemini boundary, and adapters for weather, soil, and market data.
+
+All agronomic decisions happen here. The frontend renders results; it never ranks.
 
 ## Structure
 
 | Path | Responsibility |
 | --- | --- |
-| `app/` | API routes, schemas, recommendation logic, integrations, reports, database access, and Gemini service. |
-| `data/` | Starter crop-training data and runtime SQLite database (the database is ignored by Git). |
-| `models/` | Generated scikit-learn model artifacts (ignored by Git). |
-| `scripts/train_model.py` | Trains the local crop classifier from the starter dataset. |
-| `tests/` | FastAPI smoke and integration tests. |
-| `Dockerfile` | Container image definition for the API. |
+| `app/` | Routes, schemas, recommendation logic, integrations, reports, persistence, security. |
+| `data/` | Starter crop-training data and the runtime SQLite database (the database is ignored by Git). |
+| `models/` | Generated model artifacts and their metrics file (ignored by Git). |
+| `scripts/train_model.py` | Trains the classifier and records cross-validated accuracy. |
+| `tests/` | Hermetic API, recommender, auth, and model tests. |
+| `Dockerfile` | Production image; runs unprivileged with a healthcheck. |
+| `requirements.txt` | Runtime dependencies only. |
+| `requirements-dev.txt` | Runtime plus test tooling. |
 
 ## Main workflow
 
-`POST /analysis` accepts a `FarmProfile`, obtains weather when configured, calculates soil health and actions, ranks crops with rotation context, derives economic and sustainability metrics, builds market outlooks, and asks Gemini to explain the final deterministic ranking when a key is available.
+`POST /analysis` accepts a `FarmProfile`, obtains weather when configured, scores
+soil health, ranks crops with rotation context, derives economics and sustainability
+metrics, builds market outlooks, and asks Gemini to explain — never to reorder — the
+deterministic ranking.
 
-Every external dependency has a labelled fallback. The API never presents a manual or curated planning value as a live official feed.
+Every external dependency has a labelled fallback, and an upstream failure degrades
+to it rather than returning 5xx. The API never presents a manual or curated value as
+a live official feed: each response carries `source` and `live`.
+
+## Invariants
+
+- `estimated_revenue == expected_yield * market_price`
+- `expected_profit == estimated_revenue - estimated_cost`
+- Results are totally ordered by `(-suitability, -expected_profit, crop)`
+- The trained model influences ranking only above 60% cross-validated accuracy,
+  scaled by that accuracy
+
+These are enforced by tests in `tests/test_recommender.py`.
 
 ## Environment
 
-Create a local `.env` at the repository root. It is ignored by Git.
-
-```dotenv
-GEMINI_API_KEY=your_key
-GEMINI_MODEL=gemini-3.6-flash
-OPENWEATHER_API_KEY=optional_key
-AGMARKNET_SOURCE_URL=optional_official_feed
-ENAM_SOURCE_URL=optional_official_feed
-```
+Create `.env` at the repository root; see `docs/SETUP.md` for the full table. The
+service runs with no keys set.
 
 ## Run and test
 
-```powershell
-cd backend
-.\.venv\Scripts\python.exe scripts\train_model.py
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
-.\.venv\Scripts\python.exe -m pytest
+```bash
+python3 -m venv .venv && . .venv/bin/activate    # PowerShell: .\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+python scripts/train_model.py
+python -m uvicorn app.main:app --reload --port 8000
+python -m pytest -q
 ```
 
-The tests disable live Gemini calls so they stay deterministic and do not consume API quota. Gemini behaviour is exercised through mocked structured responses.
+Tests use a temporary database and model directory, force API keys empty before the
+app is imported, and disable live Gemini calls.
