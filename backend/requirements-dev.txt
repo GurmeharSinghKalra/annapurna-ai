@@ -1,0 +1,4 @@
+# Test-only tooling. Kept out of requirements.txt so it is not shipped in the
+# production image.
+-r requirements.txt
+pytest==9.0.2
