@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -5,6 +6,12 @@ from app.gemini_service import DiseaseAnalysis, RecommendationInsight, gemini_se
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def disable_live_gemini(monkeypatch):
+    """Keep the test suite deterministic and avoid consuming live API quota."""
+    monkeypatch.setattr(gemini_service, "client", None)
 
 
 def test_health():
@@ -223,6 +230,44 @@ def test_weather_soil_and_market():
         response = client.post(route, json=farm)
         assert response.status_code == 200
         assert "source" in response.json()
+
+
+def test_complete_farm_analysis_connects_proposal_workflow(monkeypatch):
+    async def no_gemini(farm, recommendations):
+        return None
+
+    monkeypatch.setattr(gemini_service, "recommendation_insight", no_gemini)
+    response = client.post(
+        "/analysis",
+        json={
+            "location": "Sonipat, Haryana",
+            "season": "Rabi",
+            "previous_crop": "Rice",
+            "soil_type": "Alluvial",
+            "land_size": 2,
+            "ph": 6.6,
+            "nitrogen": 46,
+            "phosphorus": 38,
+            "potassium": 42,
+            "temperature": 21,
+            "humidity": 58,
+            "rainfall": 62,
+            "budget": 60000,
+            "market_priority": "Sustainability",
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["recommendations"]
+    assert payload["weather"]["source"]
+    assert 0 <= payload["soil"]["health_score"] <= 100
+    assert payload["soil"]["actions"]
+    assert payload["markets"][0]["modal_price_per_quintal"] > 0
+    top = payload["recommendations"][0]
+    assert top["estimated_cost"] > 0
+    assert top["estimated_revenue"] > top["estimated_cost"]
+    assert 0 < top["profit_margin"] < 100
+    assert 0 < top["sustainability_score"] <= 100
 
 
 def test_catalog_and_admin_summary():

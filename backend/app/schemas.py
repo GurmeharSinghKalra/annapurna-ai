@@ -8,6 +8,7 @@ class FarmProfile(BaseModel):
     language: str = Field(default="English")
     land_size: float = Field(default=2, ge=0.1)
     season: str = Field(default="Kharif")
+    previous_crop: str = Field(default="None")
     soil_type: str = Field(default="Alluvial")
     ph: float = Field(default=6.6, ge=0, le=14)
     nitrogen: float = Field(default=62, ge=0, le=100)
@@ -54,6 +55,12 @@ class Recommendation(BaseModel):
     cautions: list[str]
     expected_profit: int
     expected_yield: int
+    estimated_cost: int
+    estimated_revenue: int
+    profit_margin: int
+    market_price: int
+    market_trend: float
+    sustainability_score: int
     water: str
     rotation: str
     sustainability: str

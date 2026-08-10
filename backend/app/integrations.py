@@ -3,6 +3,12 @@ import httpx
 from .config import settings
 from .schemas import FarmProfile
 
+MARKET_NAMES = {
+    "Rice": "Paddy (common)", "Maize": "Maize", "Cotton": "Cotton", "Wheat": "Wheat",
+    "Mustard": "Mustard seed", "Chickpea": "Gram", "Sugarcane": "Sugarcane",
+    "Pearl Millet": "Bajra",
+}
+
 
 def integration_status() -> dict:
     return {
@@ -55,19 +61,41 @@ async def fetch_weather(farm: FarmProfile) -> dict:
 
 
 def soil_profile(farm: FarmProfile) -> dict:
+    nutrient_average = round((farm.nitrogen + farm.phosphorus + farm.potassium) / 3)
+    ph_score = max(0, round(100 - abs(farm.ph - 6.8) * 22))
+    health_score = round((nutrient_average * 0.55) + (ph_score * 0.45))
+    actions = []
+    if farm.ph < 5.8:
+        actions.append("Discuss agricultural lime application with a local soil expert.")
+    elif farm.ph > 7.8:
+        actions.append("Add organic matter and use locally recommended amendments for alkaline soil.")
+    if farm.nitrogen < 45:
+        actions.append("Prioritize split nitrogen application or a legume rotation.")
+    if farm.phosphorus < 40:
+        actions.append("Confirm phosphorus requirement with a soil test before basal application.")
+    if farm.potassium < 40:
+        actions.append("Check potassium requirement, especially for water-stress resilience.")
+    if not actions:
+        actions.append("Maintain organic matter and repeat a laboratory soil test before the next major season.")
     return {
-        "source": "SoilGrids/ISRO Bhuvan adapter placeholder",
+        "source": "farmer inputs with SoilGrids/ISRO-ready adapter",
         "location": farm.location,
         "soil_type": farm.soil_type,
         "ph": farm.ph,
         "nitrogen": farm.nitrogen,
         "phosphorus": farm.phosphorus,
         "potassium": farm.potassium,
-        "note": "Connect SoilGrids or ISRO Bhuvan lookup for live regional soil data.",
+        "health_score": health_score,
+        "classification": "good" if health_score >= 70 else "attention needed" if health_score < 50 else "moderate",
+        "actions": actions,
+        "note": "Values remain farmer-entered until coordinates or an official soil-test feed are configured.",
     }
 
 
 def market_profile(farm: FarmProfile, crop: str, expected_profit: int) -> dict:
+    from .recommender import CROPS
+
+    crop_data = next(item for item in CROPS if item["crop"] == crop)
     source = "curated demo market profile"
     if settings.agmarknet_source_url or settings.enam_source_url:
         source = "configured market data adapter"
@@ -75,9 +103,13 @@ def market_profile(farm: FarmProfile, crop: str, expected_profit: int) -> dict:
     return {
         "source": source,
         "crop": crop,
+        "commodity": MARKET_NAMES.get(crop, crop),
         "expected_profit": expected_profit,
         "price_band": price_band,
+        "modal_price_per_quintal": crop_data["market_price"],
+        "trend_percent": crop_data["market_trend"],
+        "trend": "rising" if crop_data["market_trend"] > 0 else "softening",
         "agmarknet": settings.agmarknet_source_url or "not configured",
         "enam": settings.enam_source_url or "not configured",
-        "note": "Use official market feeds before production deployment.",
+        "note": "Planning baseline; verify the current mandi price before sale or investment.",
     }

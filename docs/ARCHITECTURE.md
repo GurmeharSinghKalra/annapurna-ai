@@ -45,9 +45,9 @@ Backend modules:
 
 1. User enters farm details in the frontend.
 2. Frontend can calculate local fallback recommendations immediately.
-3. Clicking Sync API sends the farm profile to `POST /recommendations`.
-4. Backend combines rule scoring with the trained scikit-learn model when available.
-5. Gemini explains the ranked recommendation without changing the deterministic ranking.
+3. Clicking Run complete analysis sends the farm profile and previous crop to `POST /analysis`.
+4. Backend labels and combines weather, soil health, market context, rotation-aware ranking, economics, and sustainability metrics.
+5. The trained model augments transparent local scoring; Gemini explains the ranking without changing it.
 6. User can save history, ask Gemini questions, upload a disease image for Gemini screening, and export a report.
 
 ## Storage

@@ -1,6 +1,6 @@
 # Annapurna AI
 
-Annapurna AI is a crop recommendation and agricultural advisory prototype for the minor project proposal. It covers the planned frontend modules and includes a backend API scaffold for the later ML/API implementation.
+Annapurna AI is a working crop recommendation and agricultural advisory application built from the project proposal. It combines a responsive multipage React interface, FastAPI services, local persistence, explainable crop ranking, a trainable ML model, and Gemini-powered advisory workflows.
 
 See `PROPOSAL_COVERAGE.md` for a requirement-by-requirement implementation map.
 
@@ -17,7 +17,7 @@ See `PROPOSAL_COVERAGE.md` for a requirement-by-requirement implementation map.
 ## What Is Built
 
 - React frontend dashboard for farmer profile, soil, weather, nutrients, budget, and season inputs.
-- Crop recommendation cards with suitability, reasons, warnings, yield, profit, water need, sustainability, and crop rotation.
+- One complete farm analysis joining soil health, weather, rotation-aware crop ranking, market outlook, yield, cost, revenue, profit margin, water demand, and sustainability scoring.
 - Weather, market, Gemini advisor, Gemini multimodal disease screening, saved history, data-source, and ethics/compliance sections.
 - FastAPI backend with Gemini-powered recommendation explanations, multilingual chat, and crop-image screening.
 - SQLite prototype persistence for saved recommendation history.
@@ -64,6 +64,7 @@ GET  /crops
 GET  /admin/summary
 GET  /integrations/status
 POST /recommendations
+POST /analysis
 POST /reports/recommendation
 POST /auth/register
 POST /auth/login
@@ -101,9 +102,9 @@ The trained artifact is written to `backend/models/crop_recommender.joblib`. The
 
 ## Next Real Integrations
 
-- Replace rule-based recommendation with a trained scikit-learn model.
+- Expand the starter crop dataset with independently validated regional samples.
 - Add OpenWeatherMap API key in backend environment variables.
-- Connect Agmarknet/eNAM or a curated market dataset.
+- Connect official current Agmarknet/eNAM transactions to replace the labelled planning baseline.
 - Validate Gemini prompts and screening results with regional agriculture experts.
 - Add a trained specialist disease model when a validated labelled dataset is available.
 

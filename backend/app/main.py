@@ -1,4 +1,5 @@
 from sqlite3 import IntegrityError
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,6 +49,31 @@ async def crop_recommendations(farm: FarmProfile):
         "recommendations": recommendations,
         "ai_explanation": insight.model_dump() if insight else None,
         "ai_provider": "gemini" if insight else "local_fallback",
+    }
+
+
+@app.post("/analysis")
+async def farm_analysis(farm: FarmProfile):
+    """Run the proposal's soil, weather, crop, rotation, market and AI workflow together."""
+    weather_data = await fetch_weather(farm)
+    analyzed_farm = farm.model_copy(
+        update={
+            "temperature": weather_data["temperature"],
+            "humidity": weather_data["humidity"],
+        }
+    )
+    recommendations = recommend(analyzed_farm)[:5]
+    markets = [market_profile(analyzed_farm, item.crop, item.expected_profit) for item in recommendations[:3]]
+    insight = await gemini_service.recommendation_insight(analyzed_farm, recommendations)
+    return {
+        "analyzed_at": datetime.now(UTC).isoformat(),
+        "recommendations": recommendations,
+        "weather": weather_data,
+        "soil": soil_profile(analyzed_farm),
+        "markets": markets,
+        "ai_explanation": insight.model_dump() if insight else None,
+        "ai_provider": "gemini" if insight else "local_fallback",
+        "data_note": "Live sources are used when configured; every fallback is labelled in its source field.",
     }
 
 

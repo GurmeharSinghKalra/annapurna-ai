@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 const crops = [
   {
     name: 'Rice',
@@ -161,6 +163,7 @@ const initialFarm = {
   language: 'English',
   landSize: 2,
   season: 'Kharif',
+  previousCrop: 'None',
   soilType: 'Alluvial',
   ph: 6.6,
   nitrogen: 62,
@@ -203,6 +206,7 @@ function toApiFarm(farm) {
     language: farm.language,
     land_size: Number(farm.landSize),
     season: farm.season,
+    previous_crop: farm.previousCrop,
     soil_type: farm.soilType,
     ph: Number(farm.ph),
     nitrogen: Number(farm.nitrogen),
@@ -223,7 +227,13 @@ function normalizeRecommendation(item) {
     icon: item.icon || cropIcons[item.crop] || Sprout,
     water: item.water,
     expectedProfit: item.expectedProfit ?? item.expected_profit,
-    expectedYield: item.expectedYield ?? item.expected_yield
+    expectedYield: item.expectedYield ?? item.expected_yield,
+    estimatedCost: item.estimatedCost ?? item.estimated_cost,
+    estimatedRevenue: item.estimatedRevenue ?? item.estimated_revenue,
+    profitMargin: item.profitMargin ?? item.profit_margin,
+    marketPrice: item.marketPrice ?? item.market_price,
+    marketTrend: item.marketTrend ?? item.market_trend,
+    sustainabilityScore: item.sustainabilityScore ?? item.sustainability_score
   };
 }
 
@@ -312,6 +322,8 @@ function App() {
   const [apiRecommendations, setApiRecommendations] = useState(null);
   const [geminiExplanation, setGeminiExplanation] = useState(null);
   const [diseaseAdvisory, setDiseaseAdvisory] = useState('');
+  const [analysis, setAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   const localRecommendations = useMemo(
     () => crops.map((crop) => scoreCrop(crop, farm)).sort((a, b) => b.suitability - a.suitability),
@@ -320,7 +332,7 @@ function App() {
   const recommendations = apiRecommendations || localRecommendations;
   const topCrop = recommendations[0];
 
-  const weather = useMemo(
+  const fallbackWeather = useMemo(
     () => ({
       source: 'OpenWeatherMap ready',
       temperature: farm.temperature,
@@ -335,8 +347,15 @@ function App() {
     }),
     [farm]
   );
+  const weather = analysis?.weather || fallbackWeather;
+  const soilAnalysis = analysis?.soil;
+  const marketAnalysis = analysis?.markets?.[0];
 
   useEffect(() => {
+    const storedUser = localStorage.getItem('annapurna-user');
+    if (storedUser) {
+      try { setAuthUser(JSON.parse(storedUser)); } catch { localStorage.removeItem('annapurna-user'); }
+    }
     loadHistory();
     loadIntegrationStatus();
     const handleRoute = () => setRoute(window.location.pathname || '/');
@@ -354,11 +373,12 @@ function App() {
     setFarm((current) => ({ ...current, [field]: value }));
     setApiRecommendations(null);
     setGeminiExplanation(null);
+    setAnalysis(null);
   }
 
   async function registerUser() {
     try {
-      const response = await fetch('http://127.0.0.1:8000/auth/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -376,6 +396,7 @@ function App() {
       }
       const data = await response.json();
       setAuthUser(data.user);
+      localStorage.setItem('annapurna-user', JSON.stringify(data.user));
       setApiStatus('Account registered');
       navigate('/dashboard');
     } catch (error) {
@@ -387,7 +408,7 @@ function App() {
 
   async function loginUser() {
     try {
-      const response = await fetch('http://127.0.0.1:8000/auth/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: farm.phone, password: authPassword })
@@ -395,6 +416,7 @@ function App() {
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
       setAuthUser(data.user);
+      localStorage.setItem('annapurna-user', JSON.stringify(data.user));
       setFarm((current) => ({
         ...current,
         farmerName: data.user.name,
@@ -411,7 +433,7 @@ function App() {
 
   async function loadHistory() {
     try {
-      const response = await fetch('http://127.0.0.1:8000/history');
+      const response = await fetch(`${API_BASE}/history`);
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
       setHistory(
@@ -431,7 +453,7 @@ function App() {
 
   async function loadIntegrationStatus() {
     try {
-      const response = await fetch('http://127.0.0.1:8000/integrations/status');
+      const response = await fetch(`${API_BASE}/integrations/status`);
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       setIntegrationStatus(await response.json());
     } catch (error) {
@@ -457,6 +479,7 @@ function App() {
       `Location: ${farm.location}`,
       `Language: ${farm.language}`,
       `Season: ${farm.season}`,
+      `Previous crop: ${farm.previousCrop}`,
       `Soil type: ${farm.soilType}`,
       `Land size: ${farm.landSize} acre`,
       `Budget: INR ${Number(farm.budget).toLocaleString('en-IN')}`,
@@ -465,6 +488,12 @@ function App() {
       `Suitability: ${topCrop.suitability}%`,
       `Expected yield: ${topCrop.expectedYield} quintal`,
       `Expected return: INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`,
+      ...(topCrop.estimatedCost ? [
+        `Estimated cost: INR ${topCrop.estimatedCost.toLocaleString('en-IN')}`,
+        `Estimated revenue: INR ${topCrop.estimatedRevenue.toLocaleString('en-IN')}`,
+        `Profit margin: ${topCrop.profitMargin}%`,
+        `Sustainability score: ${topCrop.sustainabilityScore}/100`
+      ] : []),
       `Water need: ${topCrop.water}`,
       '',
       'Why recommended:',
@@ -500,7 +529,7 @@ function App() {
     setHistory((items) => [localRecord, ...items.slice(0, 5)]);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/history', {
+      const response = await fetch(`${API_BASE}/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -520,8 +549,9 @@ function App() {
   }
 
   async function syncBackend() {
+    setAnalysisLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/recommendations', {
+      const response = await fetch(`${API_BASE}/analysis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(toApiFarm(farm))
@@ -530,12 +560,15 @@ function App() {
       const data = await response.json();
       const normalized = (data.recommendations || []).map(normalizeRecommendation);
       setApiRecommendations(normalized.length ? normalized : null);
+      setAnalysis(data);
       setGeminiExplanation(data.ai_explanation || null);
       const top = normalized[0];
       setApiStatus(top ? `${data.ai_provider === 'gemini' ? 'Gemini explanation ready' : 'Local ranking ready'}: ${top.name} ${top.suitability}%` : 'Backend online');
     } catch (error) {
       setGeminiExplanation(null);
       setApiStatus('Backend offline: run FastAPI on port 8000');
+    } finally {
+      setAnalysisLoading(false);
     }
   }
 
@@ -545,7 +578,7 @@ function App() {
     setQuestion('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/chat', {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -574,7 +607,7 @@ function App() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('crop', topCrop.name);
-      const response = await fetch('http://127.0.0.1:8000/disease', {
+      const response = await fetch(`${API_BASE}/disease`, {
         method: 'POST',
         body: formData
       });
@@ -639,6 +672,7 @@ function App() {
             <Field label="Location" value={farm.location} onChange={(value) => update('location', value)} />
             <SelectField label="Language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />
             <SelectField label="Season" value={farm.season} values={['Kharif', 'Rabi', 'Zaid']} onChange={(value) => update('season', value)} />
+            <SelectField label="Previous crop" value={farm.previousCrop} values={['None', ...crops.map((crop) => crop.name)]} onChange={(value) => update('previousCrop', value)} />
             <SelectField label="Soil type" value={farm.soilType} values={['Alluvial', 'Black', 'Clayey', 'Loamy', 'Sandy loam']} onChange={(value) => update('soilType', value)} />
             <RangeInput label="Land size (acre)" field="landSize" min="0.5" max="10" step="0.5" value={farm.landSize} update={update} />
             <RangeInput label="Soil pH" field="ph" min="4" max="9" step="0.1" value={farm.ph} update={update} />
@@ -655,7 +689,7 @@ function App() {
         <Panel title="Best crop matches" eyebrow="Step 02 / Compare" icon={BarChart3}>
           <div className="crop-list">{recommendations.slice(0, 4).map((crop) => <CropCard crop={crop} key={crop.name} />)}</div>
           {geminiExplanation && <div className="gemini-insight"><div><Bot size={18} /><strong>Gemini explanation</strong></div><p>{geminiExplanation.summary}</p><span><b>Next:</b> {geminiExplanation.priority_action}</span><span><b>Watch:</b> {geminiExplanation.risk_note}</span></div>}
-          <div className="planner-actions"><button className="secondary-action" onClick={syncBackend}><Bot size={18} /> Explain with Gemini</button><button className="primary-action" onClick={savePlan}><Save size={18} /> Save this plan</button></div>
+          <div className="planner-actions"><button className="secondary-action" onClick={syncBackend} disabled={analysisLoading}><Bot size={18} /> {analysisLoading ? 'Analysing farm…' : 'Run complete analysis'}</button><button className="primary-action" onClick={savePlan}><Save size={18} /> Save this plan</button></div>
         </Panel>
       </section>
     );
@@ -667,11 +701,21 @@ function App() {
         </Panel>
         <Panel title="Yield and profit" eyebrow="Economics" icon={LineChart}>
           <div className="kpi-row"><Metric icon={Wheat} label="Estimated yield" value={`${topCrop.expectedYield} quintal`} /><Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} /></div>
-          <p className="panel-copy">Estimate uses crop profile, land size, suitability, and budget readiness.</p>
+          {topCrop.estimatedCost && <div className="insight-facts"><span><b>Cost</b> INR {topCrop.estimatedCost.toLocaleString('en-IN')}</span><span><b>Revenue</b> INR {topCrop.estimatedRevenue.toLocaleString('en-IN')}</span><span><b>Margin</b> {topCrop.profitMargin}%</span></div>}
+          <p className="panel-copy">Planning estimates use crop profile, land size, suitability, budget readiness, and a labelled market baseline.</p>
         </Panel>
         <Panel title="Weather readiness" eyebrow={weather.source} icon={CloudSun}>
           <div className="kpi-row"><Metric icon={CloudSun} label="Temperature" value={`${weather.temperature} C`} /><Metric icon={Droplets} label="Humidity" value={`${weather.humidity}%`} /></div>
           <p className="alert-line">{weather.alert}</p>
+        </Panel>
+        <Panel title="Soil health" eyebrow={soilAnalysis?.source || 'Run analysis to assess'} icon={Database}>
+          {soilAnalysis ? <><div className="kpi-row"><Metric icon={Leaf} label="Health score" value={`${soilAnalysis.health_score}/100`} /><Metric icon={Activity} label="Condition" value={soilAnalysis.classification} /></div><div className="advice-list">{soilAnalysis.actions.map((action) => <p key={action}>{action}</p>)}</div></> : <p className="panel-copy">Run complete analysis in the crop planner to generate soil actions from pH and NPK values.</p>}
+        </Panel>
+        <Panel title="Market outlook" eyebrow={marketAnalysis?.source || 'Run analysis to compare'} icon={IndianRupee}>
+          {marketAnalysis ? <><div className="kpi-row"><Metric icon={IndianRupee} label="Planning price" value={`INR ${marketAnalysis.modal_price_per_quintal}/q`} /><Metric icon={LineChart} label="Direction" value={`${marketAnalysis.trend} ${marketAnalysis.trend_percent > 0 ? '+' : ''}${marketAnalysis.trend_percent}%`} /></div><p className="panel-copy">{marketAnalysis.note}</p></> : <p className="panel-copy">Market context will appear after the complete analysis.</p>}
+        </Panel>
+        <Panel title="Sustainability" eyebrow="Rotation and resource use" icon={Sprout}>
+          <div className="kpi-row"><Metric icon={Leaf} label="Plan score" value={topCrop.sustainabilityScore ? `${topCrop.sustainabilityScore}/100` : 'Pending'} /><Metric icon={Droplets} label="Water demand" value={topCrop.water} /></div><p className="panel-copy">{topCrop.rotation}</p><p className="panel-copy">{topCrop.sustainability}</p>
         </Panel>
       </section>
     );
@@ -734,7 +778,7 @@ function App() {
           <div className="dashboard-copy"><p className="eyebrow">{farm.season} season workspace</p><h2>Good decisions begin with a clear field picture.</h2><p className="subhead">Your strongest match is <strong>{topCrop.name}</strong>. Review the current signals or update the planner as conditions change.</p><div className="action-row"><button className="primary-action" onClick={() => navigate('/planner')}><Sprout size={18} /> Plan a crop</button><button className="secondary-action" onClick={() => navigate('/advisor')}><Bot size={18} /> Ask advisor</button></div></div>
           <FieldMap crop={topCrop} moisture={farm.humidity} />
         </section>
-        <section className="status-grid dashboard-metrics"><Metric icon={BarChart3} label="Top recommendation" value={`${topCrop.name} · ${topCrop.suitability}%`} /><Metric icon={MapPin} label="Farm location" value={farm.location} /><Metric icon={CloudSun} label="Field weather" value={`${farm.temperature} C · ${farm.humidity}%`} /><Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} /></section>
+        <section className="status-grid dashboard-metrics"><Metric icon={BarChart3} label="Top recommendation" value={`${topCrop.name} · ${topCrop.suitability}%`} /><Metric icon={MapPin} label="Farm location" value={farm.location} /><Metric icon={CloudSun} label="Field weather" value={`${weather.temperature} C · ${weather.humidity}%`} /><Metric icon={IndianRupee} label="Expected return" value={`INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`} /></section>
         <section className="quick-grid">
           <QuickAction icon={Sprout} title="Update crop plan" text="Compare crops using soil, weather, budget, and season." onClick={() => navigate('/planner')} />
           <QuickAction icon={Leaf} title="Review advisory" text={`${topCrop.name} guidance, yield, profit, and sustainability.`} onClick={() => navigate('/insights')} />
@@ -754,7 +798,7 @@ function App() {
         <nav className="nav-list" aria-label="Application navigation">
           {navItems.map(([path, label, Icon]) => <button className={`nav-item ${route === path ? 'active' : ''}`} onClick={() => navigate(path)} key={path}><Icon size={18} /><span>{label}</span></button>)}
         </nav>
-        <div className="sidebar-profile"><div className="avatar">{(authUser?.name || farm.farmerName).charAt(0)}</div><div><strong>{authUser?.name || farm.farmerName}</strong><span>{farm.location}</span></div><button aria-label="Sign out" onClick={() => { setAuthUser(null); navigate('/login'); }}><LogOut size={17} /></button></div>
+        <div className="sidebar-profile"><div className="avatar">{(authUser?.name || farm.farmerName).charAt(0)}</div><div><strong>{authUser?.name || farm.farmerName}</strong><span>{farm.location}</span></div><button aria-label="Sign out" onClick={() => { setAuthUser(null); localStorage.removeItem('annapurna-user'); navigate('/login'); }}><LogOut size={17} /></button></div>
       </aside>
       <section className="workspace saas-workspace">
         <header className="app-topbar"><div><p className="eyebrow">Annapurna workspace</p><h2>{currentMeta[0]}</h2><p>{currentMeta[1]}</p></div><div className="topbar-actions"><span className="live-pill"><i /> Advisory online</span><button className="secondary-action" onClick={exportReport}><Download size={17} /> Report</button></div></header>

@@ -456,6 +456,10 @@ li + li { margin-top: 5px; }
 .panel-copy, .empty-state { max-width: 58ch; margin-bottom: 0; line-height: 1.65; }
 .alert-line { border: 1px solid #a97734; border-left: 5px solid var(--orange); background: #f7e8c3; font-weight: 750; }
 
+.insight-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 14px; border: 1px solid var(--line); background: var(--line); }
+.insight-facts span { display: grid; gap: 5px; padding: 12px; background: #f4f1e8; color: var(--muted); font-size: 12px; }
+.insight-facts b { color: var(--ink); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+
 .upload-box { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 116px; padding: 18px; border: 2px dashed #496759; background: #e5e7dc; color: #2f3d3a; text-align: center; cursor: pointer; }
 .upload-box:hover { background: #d9e2d4; }
 .upload-box input { display: none; }
@@ -860,6 +864,7 @@ input, select { border: 1px solid #aeb9b2; border-radius: 8px; background: #fff;
 }
 
 @media (max-width: 560px) {
+  .insight-facts { grid-template-columns: 1fr; }
   h2 { font-size: 2.45rem; }
   .hero-copy { padding: 28px 20px; }
   .action-row { display: grid; grid-template-columns: 1fr; }

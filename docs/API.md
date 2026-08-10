@@ -109,3 +109,14 @@ GET /crops
 GET /admin/summary
 GET /integrations/status
 ```
+# Complete farm analysis
+
+`POST /analysis` is the primary proposal workflow. It accepts the same farm profile as
+`POST /recommendations`, plus `previous_crop`, and returns:
+
+- ranked crop recommendations;
+- expected yield, cost, revenue, profit, margin, market trend, and sustainability score;
+- weather data with a source label;
+- soil-health scoring and pH/NPK actions;
+- market outlook for the top three crops;
+- a Gemini explanation when configured, with a local fallback otherwise.
