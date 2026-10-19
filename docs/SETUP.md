@@ -1,97 +1,114 @@
-# Setup Guide
+# Setup
 
 ## Requirements
 
-- Node.js 22 or newer
-- Python 3.13 or newer
-- Git
-- Optional: Docker Desktop
+- Python 3.13
+- Node.js 20 or newer
+- Docker and Docker Compose, for the container path only
 
-## Frontend
+Commands below are POSIX shell. On Windows PowerShell, activate the virtual environment with
+`.venv\Scripts\Activate.ps1` and use `Copy-Item` in place of `cp`.
 
-```powershell
-cd "C:\Users\ameri\Documents\New project\annapurna-ai"
+## Local development
+
+```bash
+git clone https://github.com/GurmeharSinghKalra/annapurna-ai.git
+cd annapurna-ai
+cp .env.example .env
+```
+
+Nothing in `.env` is required to start. Each key you add turns a labelled fallback into a real
+data source; see the table in the main README.
+
+### Backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+
+# Optional: build and train the crop model. The ranking works without it.
+python scripts/build_dataset.py
+python scripts/train_model.py
+
+# Create the schema. Defaults to SQLite at backend/data/annapurna.db.
+alembic upgrade head
+
+uvicorn app.main:app --reload --port 8000
+```
+
+Check it: <http://127.0.0.1:8000/health> and <http://127.0.0.1:8000/docs>.
+
+### Frontend
+
+```bash
 npm install
 npm run dev
 ```
 
-Open:
+Open <http://127.0.0.1:5173>. The Vite dev server proxies `/api` to port 8000, so the browser
+makes same-origin calls and development exercises the same code path as production.
 
-```text
-http://127.0.0.1:5173
-```
-
-## Backend
-
-```powershell
-cd "C:\Users\ameri\Documents\New project\annapurna-ai\backend"
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python scripts\train_model.py
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Open:
-
-```text
-http://127.0.0.1:8000/health
-```
-
-## Environment Variables
-
-Copy the example environment file:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Supported keys:
-
-- `OPENWEATHER_API_KEY`
-- `GEMINI_API_KEY`
-- `GEMINI_MODEL` (defaults to `gemini-3.6-flash`)
-- `GEMINI_TIMEOUT_SECONDS` (defaults to 20; a timeout uses the local advisory fallback)
-- `AGMARKNET_SOURCE_URL`
-- `ENAM_SOURCE_URL`
-- `CORS_ORIGINS` (comma-separated allowed frontend origins; defaults to local development URLs)
-
-Gemini is used by recommendation explanations, the multilingual farm advisor, and
-multimodal crop-image screening. Leave the key empty to use deterministic local fallbacks.
-
-The app works without these values using local fallback behavior.
-
-### Optional market-feed contract
-
-`AGMARKNET_SOURCE_URL` and `ENAM_SOURCE_URL` are optional backend URLs, not browser URLs. If either
-is set, Annapurna requests it with `commodity`, `location`, and `format=json` query parameters.
-The endpoint must return JSON containing a list under `data`, `records`, `results`, or `items` (or
-a single object). Each matching record must contain `commodity` or `crop`, plus
-`modal_price_per_quintal` or `modal_price`, expressed in INR per quintal. A compatible result is
-labelled as a live feed; an unavailable or incompatible result automatically retains the curated
-planning baseline. Do not configure a feed unless its source and unit are verified.
+Point the proxy somewhere else with `VITE_PROXY_TARGET`, or bypass it entirely with
+`VITE_API_URL`.
 
 ## Docker
 
-In Docker, the browser calls the frontend at port 5174 and Nginx forwards `/api/*` to the backend
-container. The production frontend therefore does not depend on `127.0.0.1:8000` being available
-on the farmer's device.
-
-The Nginx configuration also applies basic browser-security headers and prevents long-lived service
-worker caching, so a new frontend deployment can replace an older offline shell.
-
-```powershell
+```bash
+cp .env.example .env
 docker compose up --build
 ```
 
-Frontend:
+This starts PostgreSQL, the API (which runs migrations on boot) and the frontend behind nginx.
 
-```text
-http://127.0.0.1:5174
+- Frontend: <http://127.0.0.1:5174>
+- API: <http://127.0.0.1:8000>
+
+The frontend container resolves the backend at request time, so it starts and serves the app even
+if the API is not up yet, returning a JSON 503 for API calls until it appears.
+
+## PostgreSQL
+
+Set `DATABASE_URL` to the provider's URL exactly as given. The libpq form is converted
+automatically, including `?sslmode=require` and `channel_binding`, which `asyncpg` cannot parse:
+
+```bash
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 ```
 
-Backend:
+Then:
 
-```text
-http://127.0.0.1:8000/health
+```bash
+cd backend && alembic upgrade head
 ```
+
+## Production
+
+1. Set `APP_ENV=production`. The app then refuses to start without `JWT_SECRET` and will not
+   create tables implicitly.
+2. Generate a secret: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+3. Set `DATABASE_URL` to a managed PostgreSQL instance.
+4. Set `CORS_ORIGINS` to your real frontend origin, and nothing else.
+5. Run `alembic upgrade head` as a deploy step rather than relying on container start, if you run
+   more than one API replica.
+6. Terminate TLS in front of the frontend container.
+7. Replace the in-process rate limiter with a shared one if you run more than one replica.
+   `/health` reports which is in use.
+
+### Health endpoints
+
+| Endpoint | Use |
+| --- | --- |
+| `GET /health` | Liveness, plus which capabilities are actually configured |
+| `GET /readyz` | Readiness. Returns 503 when the database is unreachable |
+
+## Windows portable build
+
+```powershell
+cd distribution
+.\build_windows_portable.ps1
+```
+
+Produces a folder containing an executable that serves the built frontend and the API from one
+process, with SQLite data stored beside it. Create a `.env` in that folder to add API keys.

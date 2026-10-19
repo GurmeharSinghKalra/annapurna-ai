@@ -1,262 +1,383 @@
-from .schemas import FarmProfile, Recommendation
+"""Deterministic, explainable crop ranking.
+
+What changed from the first version, and why each change matters to a farmer:
+
+* **No score floor.** Suitability was clamped to a minimum of 36, so a field with pH 14, no
+  nutrients and no rainfall still showed every crop at "36% suitable". Unsuitable crops now score
+  near zero and are labelled ``not recommended``.
+* **Hard limiters, not just weights.** Some conditions are disqualifying rather than merely
+  unfavourable: the wrong season, soil pH well outside the crop's range, a high-water crop on a
+  rainfed field. Each caps the final score and is returned in ``limiters`` so the farmer sees the
+  single reason rather than an unexplained number.
+* **Irrigation is an input, not an assumption.** Ranking paddy against bajra is meaningless without
+  knowing whether water is assured. The earlier version silently credited every farm with the same
+  irrigation allowance, which let a zero-rainfall field still score well on water.
+* **Economics are ranges.** Yield and cost vary with variety, irrigation and pest year, so low /
+  typical / high are all returned instead of one number that reads as a promise.
+* **No invented market trend**, and yield is not rounded before the money is calculated (rounding
+  first made break-even price jump non-monotonically on small plots).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .crop_data import CROPS, ROTATION_BENEFIT, WATER_DEMAND_RANK, Crop, Range
 from .ml_model import predict_crop
+from .schemas import FarmProfile, Recommendation
+
+# Component weights, summing to 100 before rotation and model adjustments.
+W_SEASON = 22
+W_SOIL = 16
+W_WATER = 20
+W_PH = 14
+W_TEMPERATURE = 12
+W_NUTRIENTS = 11
+W_PRIORITY = 5
+
+W_ROTATION = 10
+W_MODEL = 6
+
+# Millimetres of irrigation a season can realistically add, on top of rainfall, by access level.
+IRRIGATION_ALLOWANCE_MM = {"Rainfed": 0, "Limited": 250, "Assured": 900}
+
+VERDICTS = (
+    (78, "strong match"),
+    (64, "good match"),
+    (48, "workable with care"),
+    (32, "marginal"),
+    (0, "not recommended"),
+)
 
 
-CROPS = [
-    {
-        "crop": "Rice",
-        "season": "Kharif",
-        "soils": ["Alluvial", "Clayey"],
-        "rainfall": [140, 300],
-        "temperature": [22, 36],
-        "ph": [5.5, 7],
-        "water": "High",
-        "cost": 32000,
-        "market_price": 2350,
-        "market_trend": 2.4,
-        "yield": 28,
-        "rotation": "Follow with lentil, pea, or mustard.",
-        "sustainability": "Use alternate wetting and drying to reduce water use.",
-        "advisory": "Best where water access is dependable. Watch for blast disease during humid weeks.",
-    },
-    {
-        "crop": "Maize",
-        "season": "Kharif",
-        "soils": ["Alluvial", "Loamy", "Sandy loam"],
-        "rainfall": [50, 120],
-        "temperature": [18, 32],
-        "ph": [5.8, 7.5],
-        "water": "Medium",
-        "cost": 26000,
-        "market_price": 2250,
-        "market_trend": 4.1,
-        "yield": 24,
-        "rotation": "Rotate with gram, pea, or vegetables.",
-        "sustainability": "Moderate water demand and good fit for diversified farms.",
-        "advisory": "Avoid waterlogging and split nitrogen application across growth stages.",
-    },
-    {
-        "crop": "Cotton",
-        "season": "Kharif",
-        "soils": ["Black", "Loamy"],
-        "rainfall": [60, 120],
-        "temperature": [21, 35],
-        "ph": [6, 8],
-        "water": "Medium",
-        "cost": 39000,
-        "market_price": 7100,
-        "market_trend": -1.2,
-        "yield": 16,
-        "rotation": "Rotate with wheat, gram, or sorghum.",
-        "sustainability": "Needs pest monitoring; avoid repeated cotton on the same field.",
-        "advisory": "Profitable but higher-risk; inspect for sucking pests and bollworm symptoms.",
-    },
-    {
-        "crop": "Wheat",
-        "season": "Rabi",
-        "soils": ["Alluvial", "Loamy"],
-        "rainfall": [45, 110],
-        "temperature": [10, 25],
-        "ph": [6, 7.8],
-        "water": "Medium",
-        "cost": 28500,
-        "market_price": 2425,
-        "market_trend": 1.8,
-        "yield": 25,
-        "rotation": "Follow with mung bean, fodder, or maize.",
-        "sustainability": "Works well in rotation after rice or maize.",
-        "advisory": "Irrigate at crown-root initiation, tillering, and flowering.",
-    },
-    {
-        "crop": "Mustard",
-        "season": "Rabi",
-        "soils": ["Loamy", "Sandy loam", "Alluvial"],
-        "rainfall": [25, 75],
-        "temperature": [10, 26],
-        "ph": [6, 8],
-        "water": "Low",
-        "cost": 22000,
-        "market_price": 5650,
-        "market_trend": 3.3,
-        "yield": 11,
-        "rotation": "Follow after rice, maize, or pearl millet.",
-        "sustainability": "Good low-water option for winter season.",
-        "advisory": "Protect flowering stage from aphids and avoid excess irrigation.",
-    },
-    {
-        "crop": "Chickpea",
-        "season": "Rabi",
-        "soils": ["Black", "Loamy", "Sandy loam"],
-        "rainfall": [30, 90],
-        "temperature": [15, 30],
-        "ph": [6, 8.2],
-        "water": "Low",
-        "cost": 23500,
-        "market_price": 5900,
-        "market_trend": 2.7,
-        "yield": 13,
-        "rotation": "Best after wheat, rice, or maize.",
-        "sustainability": "Adds nitrogen to soil and reduces fertilizer dependency.",
-        "advisory": "Avoid waterlogging and use seed treatment against wilt.",
-    },
-    {
-        "crop": "Sugarcane",
-        "season": "Annual",
-        "soils": ["Alluvial", "Loamy", "Black"],
-        "rainfall": [110, 250],
-        "temperature": [21, 38],
-        "ph": [6, 8],
-        "water": "Very high",
-        "cost": 62000,
-        "market_price": 360,
-        "market_trend": 0.9,
-        "yield": 360,
-        "rotation": "Rotate with pulses or vegetables after ratoon cycle.",
-        "sustainability": "High return but high water footprint; use drip irrigation where possible.",
-        "advisory": "Choose only when irrigation, time, and transport access are strong.",
-    },
-    {
-        "crop": "Pearl Millet",
-        "season": "Kharif",
-        "soils": ["Sandy loam", "Loamy"],
-        "rainfall": [25, 70],
-        "temperature": [25, 40],
-        "ph": [6, 8.5],
-        "water": "Low",
-        "cost": 18500,
-        "market_price": 2650,
-        "market_trend": 5.2,
-        "yield": 15,
-        "rotation": "Rotate with mustard, chickpea, or wheat.",
-        "sustainability": "Climate-resilient crop for low-rainfall regions.",
-        "advisory": "Good fallback when rainfall is uncertain and soil is lighter.",
-    },
-]
+@dataclass(frozen=True)
+class Limiter:
+    """A disqualifying condition: it caps the score no matter how well everything else fits."""
 
-LEGUMES = {"Chickpea"}
-HIGH_WATER = {"Rice", "Sugarcane"}
-ROTATION_MATCHES = {
-    "Rice": {"Chickpea", "Mustard", "Maize"},
-    "Maize": {"Chickpea", "Mustard", "Wheat"},
-    "Cotton": {"Wheat", "Chickpea"},
-    "Wheat": {"Chickpea", "Maize", "Pearl Millet"},
-    "Mustard": {"Rice", "Maize", "Pearl Millet"},
-    "Chickpea": {"Rice", "Wheat", "Maize"},
-    "Sugarcane": {"Chickpea", "Mustard"},
-    "Pearl Millet": {"Mustard", "Chickpea", "Wheat"},
-}
+    reason: str
+    cap: int
 
 
-def _range_score(label: str, value: float, target: list[float], points: int, reasons: list[str], cautions: list[str]) -> float:
-    if target[0] <= value <= target[1]:
-        reasons.append(f"{label} is in range")
+def _band_score(value: float, low: float, high: float, points: float, tolerance: float) -> float:
+    """Full points inside the band, tapering linearly to zero ``tolerance`` units outside it."""
+    if low <= value <= high:
         return points
-    cautions.append(f"{label} is outside ideal range")
-    distance = target[0] - value if value < target[0] else value - target[1]
-    return -min(points, distance / 2)
+    distance = low - value if value < low else value - high
+    if distance >= tolerance:
+        return 0.0
+    return points * (1 - (distance / tolerance))
 
 
-def recommend(farm: FarmProfile) -> list[Recommendation]:
+def _verdict(score: float) -> str:
+    for threshold, label in VERDICTS:
+        if score >= threshold:
+            return label
+    return "not recommended"
+
+
+def seasonal_water_mm(farm: FarmProfile) -> int:
+    """Water the crop can actually receive: expected rainfall plus what irrigation can add."""
+    return int(farm.rainfall + IRRIGATION_ALLOWANCE_MM[farm.irrigation])
+
+
+def _season(crop: Crop, farm: FarmProfile, reasons: list[str], cautions: list[str], limiters: list[Limiter]) -> float:
+    if crop.season == farm.season:
+        reasons.append(f"Grown in {farm.season}, the season you are planning")
+        return W_SEASON
+    if crop.season == "Annual":
+        cautions.append(
+            f"{crop.name} occupies the field for about {int(crop.duration_days.typical)} days, "
+            f"well beyond one {farm.season} season"
+        )
+        return W_SEASON * 0.55
+    limiters.append(
+        Limiter(f"{crop.name} is a {crop.season} crop and cannot be sown for your {farm.season} plan", cap=25)
+    )
+    return 0.0
+
+
+def _join(items: tuple[str, ...]) -> str:
+    """'a', 'a or b', 'a, b or c' - so limiter text reads as a sentence."""
+    lowered = [item.lower() for item in items]
+    if len(lowered) == 1:
+        return lowered[0]
+    return f"{', '.join(lowered[:-1])} or {lowered[-1]}"
+
+
+def _soil(crop: Crop, farm: FarmProfile, reasons: list[str], limiters: list[Limiter]) -> float:
+    if farm.soil_type in crop.soils:
+        reasons.append(f"{farm.soil_type} soil suits {crop.name}")
+        return W_SOIL
+    limiters.append(
+        Limiter(
+            f"{crop.name} needs {_join(crop.soils)} soil; yours is {farm.soil_type.lower()}",
+            cap=62,
+        )
+    )
+    return 0.0
+
+
+def _water(crop: Crop, farm: FarmProfile, reasons: list[str], cautions: list[str], limiters: list[Limiter]) -> float:
+    need_low, need_high = crop.rainfall_mm_season
+    available = seasonal_water_mm(farm)
+    score = _band_score(available, need_low, need_high, W_WATER, tolerance=max(need_low * 0.6, 150))
+
+    if available < need_low:
+        shortfall = need_low - available
+        detail = (
+            f"{crop.name} needs about {int(need_low)}-{int(need_high)} mm across the season. "
+            f"Your {int(farm.rainfall)} mm rainfall plus {farm.irrigation.lower()} irrigation gives "
+            f"roughly {available} mm, short by {int(shortfall)} mm"
+        )
+        # Missing more than 40% of a crop's water is not a caution, it is a reason not to sow it.
+        if shortfall > need_low * 0.4:
+            limiters.append(Limiter(detail, cap=30))
+        else:
+            cautions.append(detail)
+    elif available > need_high * 1.5:
+        cautions.append(f"Expected water ({available} mm) is well above {crop.name}'s need; drainage will matter")
+    else:
+        reasons.append(f"Seasonal water need of {int(need_low)}-{int(need_high)} mm is covered")
+
+    if WATER_DEMAND_RANK[crop.water_demand] >= 3 and farm.irrigation == "Rainfed":
+        limiters.append(
+            Limiter(f"{crop.name} has {crop.water_demand.lower()} water demand and your field is rainfed", cap=28)
+        )
+    return score
+
+
+def _nutrients(farm: FarmProfile, reasons: list[str], cautions: list[str], limiters: list[Limiter]) -> float:
+    average = (farm.nitrogen + farm.phosphorus + farm.potassium) / 3
+    if average >= 55:
+        reasons.append("Soil nutrient levels are strong")
+        return W_NUTRIENTS
+    if average >= 40:
+        reasons.append("Soil nutrient levels are workable")
+        return W_NUTRIENTS * 0.6
+    if average >= 25:
+        cautions.append("Nutrient levels are low; budget for correction before sowing")
+        return W_NUTRIENTS * 0.25
+    limiters.append(
+        Limiter(
+            "Soil nutrient levels are very low. Correct them with a soil test before committing to any crop",
+            cap=45,
+        )
+    )
+    return 0.0
+
+
+def _ph(crop: Crop, farm: FarmProfile, reasons: list[str], cautions: list[str], limiters: list[Limiter]) -> float:
+    low, high = crop.ph
+    score = _band_score(farm.ph, low, high, W_PH, tolerance=1.5)
+    distance = max(low - farm.ph, farm.ph - high, 0.0)
+    if distance == 0:
+        reasons.append(f"Soil pH {farm.ph:g} is inside the {low:g}-{high:g} range")
+    elif distance > 1.0:
+        limiters.append(Limiter(f"Soil pH {farm.ph:g} is far outside {crop.name}'s {low:g}-{high:g} range", cap=40))
+    else:
+        cautions.append(f"Soil pH {farm.ph:g} is just outside the preferred {low:g}-{high:g} range")
+    return score
+
+
+def _temperature(
+    crop: Crop, farm: FarmProfile, reasons: list[str], cautions: list[str], limiters: list[Limiter]
+) -> float:
+    low, high = crop.temperature_c
+    score = _band_score(farm.temperature, low, high, W_TEMPERATURE, tolerance=8)
+    distance = max(low - farm.temperature, farm.temperature - high, 0.0)
+    if distance == 0:
+        reasons.append(f"Temperature {farm.temperature:g}C suits the crop")
+    elif distance > 6:
+        limiters.append(
+            Limiter(
+                f"Temperature {farm.temperature:g}C is far outside {crop.name}'s {low:g}-{high:g}C range",
+                cap=38,
+            )
+        )
+    else:
+        cautions.append(f"Temperature {farm.temperature:g}C is outside the {low:g}-{high:g}C range")
+    return score
+
+
+def _priority(crop: Crop, farm: FarmProfile, reasons: list[str]) -> float:
+    rank = WATER_DEMAND_RANK[crop.water_demand]
+    if farm.market_priority == "Profit" and crop.typical_profit_per_acre > 25_000:
+        reasons.append("Among the higher typical returns per acre")
+        return W_PRIORITY
+    if farm.market_priority == "Sustainability" and (crop.nitrogen_fixing or rank == 1):
+        reasons.append("Low water demand or soil-building, matching your sustainability priority")
+        return W_PRIORITY
+    if farm.market_priority == "Water saving" and rank <= 2:
+        reasons.append(f"{crop.water_demand} water demand, matching your water-saving priority")
+        return W_PRIORITY
+    if farm.market_priority == "Balanced":
+        return W_PRIORITY * 0.5
+    return 0.0
+
+
+def _rotation(crop: Crop, farm: FarmProfile, reasons: list[str], cautions: list[str]) -> float:
+    previous = farm.previous_crop
+    if previous in {"", "None"}:
+        return 0.0
+    if crop.name == previous:
+        cautions.append(f"You grew {previous} last season; repeating it raises pest, disease and nutrient pressure")
+        return -W_ROTATION
+    if crop.name in ROTATION_BENEFIT.get(previous, frozenset()):
+        reasons.append(f"A good rotation to follow {previous}")
+        return W_ROTATION
+    return 0.0
+
+
+def _sustainability_score(crop: Crop, farm: FarmProfile) -> int:
+    """0-100, responding to the crop and to the field it would be grown on."""
+    water_points = {1: 40, 2: 30, 3: 15, 4: 5}[WATER_DEMAND_RANK[crop.water_demand]]
+    nitrogen_points = 20 if crop.nitrogen_fixing else 8
+    rotation_points = (
+        18
+        if crop.name in ROTATION_BENEFIT.get(farm.previous_crop, frozenset())
+        else 0
+        if crop.name == farm.previous_crop
+        else 9
+    )
+    duration_points = 12 if crop.duration_days.typical <= 120 else 6 if crop.duration_days.typical <= 180 else 0
+
+    # The environmental cost of a crop is not a property of the crop alone. What matters is how
+    # much water has to be *extracted* to grow it here: rainfall is free, irrigation is pumped,
+    # and in Haryana and Punjab that pumping is the groundwater decline this score exists to
+    # discourage. So the penalty scales with the shortfall the farmer must make up, whether or
+    # not they have the irrigation to make it up with.
+    need_low = crop.rainfall_mm_season[0]
+    shortfall = max(0, need_low - farm.rainfall)
+    extraction = -min(30, int(shortfall / 40))
+
+    # On top of that, water the crop simply cannot get is an agronomic risk, not just a cost.
+    available = seasonal_water_mm(farm)
+    unmet = 0 if available >= need_low else -min(15, int((need_low - available) / 40))
+
+    total = water_points + nitrogen_points + rotation_points + duration_points + extraction + unmet + 15
+    return max(0, min(100, total))
+
+
+def _economics(crop: Crop, farm: FarmProfile, price_per_quintal: int) -> dict:
+    """Low / typical / high revenue, cost and profit for the whole holding."""
+
+    def scaled(value_range: Range) -> dict[str, float]:
+        return {
+            "low": value_range.low * farm.land_size,
+            "typical": value_range.typical * farm.land_size,
+            "high": value_range.high * farm.land_size,
+        }
+
+    yields = scaled(crop.yield_quintal_per_acre)
+    costs = scaled(crop.cost_inr_per_acre)
+    revenue = {key: value * price_per_quintal for key, value in yields.items()}
+    return {
+        "expected_yield_quintal": {key: round(value, 1) for key, value in yields.items()},
+        "estimated_cost_inr": {key: round(value) for key, value in costs.items()},
+        "estimated_revenue_inr": {key: round(value) for key, value in revenue.items()},
+        # The bad case is a low yield against a high cost; the good case is the reverse.
+        "expected_profit_inr": {
+            "low": round(revenue["low"] - costs["high"]),
+            "typical": round(revenue["typical"] - costs["typical"]),
+            "high": round(revenue["high"] - costs["low"]),
+        },
+    }
+
+
+def recommend(farm: FarmProfile, prices: dict[str, int] | None = None) -> list[Recommendation]:
+    """Rank every crop for this farm.
+
+    ``prices`` optionally maps crop name to a live modal price per quintal. When a crop is absent
+    the announced reference price is used and ``price_basis`` says so, so the farmer always knows
+    which number the money was calculated from.
+
+    A price the farmer has entered for their own mandi beats both. No national feed reaches every
+    district, and where one does it reports a market average rather than the rate this farmer can
+    actually get; their own figure is the better input, and it is the only one available at all in
+    a district no feed covers.
+    """
+    prices = dict(prices or {})
+    prices.update(farm.known_market_prices)
     predicted_crop, confidence = predict_crop(farm)
     results: list[Recommendation] = []
+
     for crop in CROPS:
-        score = 30.0
         reasons: list[str] = []
         cautions: list[str] = []
-        estimated_cost = round(crop["cost"] * farm.land_size)
-        expected_yield = round(crop["yield"] * farm.land_size)
-        estimated_revenue = round(expected_yield * crop["market_price"])
-        expected_profit = estimated_revenue - estimated_cost
-        profit_per_acre = (crop["yield"] * crop["market_price"]) - crop["cost"]
+        limiters: list[Limiter] = []
 
-        if crop["season"] == farm.season or crop["season"] == "Annual":
-            score += 18
-            reasons.append(f"Fits {farm.season} planning")
+        score = (
+            _season(crop, farm, reasons, cautions, limiters)
+            + _soil(crop, farm, reasons, limiters)
+            + _water(crop, farm, reasons, cautions, limiters)
+            + _ph(crop, farm, reasons, cautions, limiters)
+            + _temperature(crop, farm, reasons, cautions, limiters)
+            + _nutrients(farm, reasons, cautions, limiters)
+            + _priority(crop, farm, reasons)
+            + _rotation(crop, farm, reasons, cautions)
+        )
+
+        if predicted_crop == crop.name and confidence > 0:
+            score += W_MODEL * confidence
+            reasons.insert(0, f"The trained model also selects {crop.name} for these conditions")
+
+        score = max(0.0, min(100.0, score))
+        for limiter in limiters:
+            score = min(score, limiter.cap)
+
+        price = prices.get(crop.name, crop.reference_price_per_quintal)
+        if crop.name in farm.known_market_prices:
+            price_basis = "the price you entered for your own mandi"
+        elif crop.name in prices:
+            price_basis = "live mandi modal price"
         else:
-            cautions.append(f"Usually grown in {crop['season']}")
+            price_basis = crop.reference_price_basis
+        economics = _economics(crop, farm, price)
 
-        if farm.soil_type in crop["soils"]:
-            score += 16
-            reasons.append(f"{farm.soil_type} soil is suitable")
-        else:
-            cautions.append(f"Soil match is weaker for {farm.soil_type}")
+        typical_cost = economics["estimated_cost_inr"]["typical"]
+        typical_revenue = economics["estimated_revenue_inr"]["typical"]
+        typical_profit = economics["expected_profit_inr"]["typical"]
 
-        score += _range_score("pH", farm.ph, crop["ph"], 12, reasons, cautions)
-        score += _range_score("temperature", farm.temperature, crop["temperature"], 10, reasons, cautions)
-        score += _range_score("rainfall", farm.rainfall, crop["rainfall"], 12, reasons, cautions)
+        if farm.budget < typical_cost:
+            cautions.append(
+                f"Your budget is below the typical cultivation cost of INR {typical_cost:,} for {farm.land_size:g} acre"
+            )
+        if typical_profit < 0:
+            cautions.append(f"At INR {price:,}/quintal this crop does not cover its own cost")
+        elif economics["expected_profit_inr"]["low"] < 0:
+            cautions.append("A poor yield or a price fall would put this season at a loss")
 
-        nutrients = (farm.nitrogen + farm.phosphorus + farm.potassium) / 3
-        if nutrients >= 55:
-            score += 10
-            reasons.append("Nutrient level is strong")
-        elif nutrients >= 40:
-            score += 6
-            reasons.append("Nutrient level is workable")
-        else:
-            cautions.append("Nutrient correction is needed")
-
-        if farm.market_priority == "Profit" and profit_per_acre > 40000:
-            score += 6
-        if farm.market_priority == "Sustainability" and crop["water"] == "Low":
-            score += 7
-        if farm.market_priority == "Water saving" and crop["water"] in ["Low", "Medium"]:
-            score += 7
-        if farm.previous_crop not in {"", "None"}:
-            if crop["crop"] in ROTATION_MATCHES.get(farm.previous_crop, set()):
-                score += 8
-                reasons.append(f"Good rotation after {farm.previous_crop}")
-            elif crop["crop"] == farm.previous_crop:
-                score -= 9
-                cautions.append("Repeating the previous crop can increase pest and nutrient pressure")
-        if predicted_crop == crop["crop"]:
-            score += 8 + (confidence * 6)
-            reasons.insert(0, "ML model selected this crop")
-
-        if farm.budget < estimated_cost:
-            score -= 5
-            cautions.append("Available budget is below the estimated cultivation cost")
-        suitability = int(max(36, min(98, round(score))))
-        profit_margin = round((expected_profit / estimated_revenue) * 100) if estimated_revenue else 0
-        water_score = {"Low": 28, "Medium": 21, "High": 12, "Very high": 6}[crop["water"]]
-        rotation_score = 12 if crop["crop"] in ROTATION_MATCHES.get(farm.previous_crop, set()) else 7
-        nitrogen_score = 10 if crop["crop"] in LEGUMES else 6
-        sustainability_score = min(96, 45 + water_score + rotation_score + nitrogen_score)
         results.append(
             Recommendation(
-                crop=crop["crop"],
-                suitability=suitability,
+                crop=crop.name,
+                suitability=round(score),
+                verdict=_verdict(score),
+                limiters=[limiter.reason for limiter in limiters],
                 reasons=reasons[:4],
-                cautions=cautions[:3] or ["No major warning from current inputs"],
-                expected_profit=expected_profit,
-                expected_yield=expected_yield,
-                estimated_cost=estimated_cost,
-                estimated_revenue=estimated_revenue,
-                profit_margin=profit_margin,
-                market_price=crop["market_price"],
-                market_trend=crop["market_trend"],
-                sustainability_score=sustainability_score,
-                water=crop["water"],
-                rotation=crop["rotation"],
-                sustainability=crop["sustainability"],
-                advisory=crop["advisory"],
+                cautions=cautions[:4] or ["No significant warning from the conditions you entered"],
+                expected_profit=typical_profit,
+                expected_yield=round(economics["expected_yield_quintal"]["typical"], 1),
+                estimated_cost=typical_cost,
+                estimated_revenue=typical_revenue,
+                profit_margin=round((typical_profit / typical_revenue) * 100) if typical_revenue else 0,
+                market_price=price,
+                price_basis=price_basis,
+                economics=economics,
+                duration_days=round(crop.duration_days.typical),
+                sustainability_score=_sustainability_score(crop, farm),
+                water=crop.water_demand,
+                rotation=crop.rotation,
+                sustainability=crop.sustainability,
+                advisory=crop.advisory,
+                sources=list(crop.sources),
             )
         )
 
-    return sorted(results, key=lambda item: item.suitability, reverse=True)
+    # Ties broken by typical profit, so the ordering is stable and defensible.
+    return sorted(results, key=lambda item: (item.suitability, item.expected_profit), reverse=True)
 
 
 def crop_catalog() -> list[dict]:
-    return [
-        {
-            "crop": crop["crop"],
-            "season": crop["season"],
-            "soils": crop["soils"],
-            "water": crop["water"],
-            "rainfall": crop["rainfall"],
-            "temperature": crop["temperature"],
-            "ph": crop["ph"],
-            "market_price": crop["market_price"],
-            "market_trend": crop["market_trend"],
-        }
-        for crop in CROPS
-    ]
+    from .crop_data import catalog
+
+    return catalog()

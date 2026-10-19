@@ -1,137 +1,161 @@
-# API Reference
+# API reference
 
-Base URL:
+The route table below is generated from the running application's OpenAPI schema, so it cannot
+describe a route that does not exist. Regenerate it with:
 
-```text
-http://127.0.0.1:8000
+```bash
+cd backend && python scripts/generate_api_docs.py
 ```
 
-## Health
+Base URL in development: `http://127.0.0.1:8000`. Behind the frontend container: `/api`.
+Interactive documentation is served at `/docs` while the API is running.
 
-```http
-GET /health
-```
+## Conventions
 
-Returns service status and ML model availability.
+- Request and response bodies are JSON unless stated otherwise.
+- Validation failures return `422` with a `detail` array naming each offending field.
+- Every response carries an `X-Request-ID` header; quote it when reporting a problem.
+- Rate-limited routes return `429` with a `Retry-After` header.
+- Request bodies are capped (256 KB for JSON, 8 MB for an image upload) and the cap is enforced
+  while the body streams, so a chunked request cannot bypass it.
+- Authenticated routes expect `Authorization: Bearer <access_token>`. Tokens are never cookies,
+  and the API does not accept credentials cross-origin.
 
-All recommendation economics use a single planning model: expected yield (quintals) × planning
-price (INR/quintal) = estimated revenue; estimated revenue − estimated cultivation cost = expected
-profit. The same baseline is used by the Season Finance endpoint unless a compatible live market
-feed is configured.
+---
 
-FarmProfile accepts only the supported seasons, soil types, languages, previous crops, and market
-priorities exposed by the interface. Chat questions are capped at 1,200 characters, and finance
-expenses must be non-negative values. Invalid input returns HTTP 422 rather than being silently
-interpreted as a planning recommendation.
 
-The no-account API does not accept browser credentials or cookies through CORS.
+## Operations
 
-## Crop Recommendations
+Health, readiness, and an honest account of which external services are connected. No authentication.
 
-```http
-POST /recommendations
-```
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/admin/summary` | Admin Summary | No |
+| `GET` | `/crops` | Crops | No |
+| `GET` | `/health` | Liveness plus a description of which capabilities are actually available. | No |
+| `GET` | `/integrations/status` | Integrations | No |
+| `GET` | `/readyz` | Readiness: fails when a dependency the API cannot serve without is down. | No |
 
-Body:
 
-```json
-{
-  "farmer_name": "Demo Farmer",
-  "location": "Sonipat, Haryana",
-  "language": "English",
-  "land_size": 2,
-  "season": "Kharif",
-  "soil_type": "Alluvial",
-  "ph": 6.6,
-  "nitrogen": 62,
-  "phosphorus": 41,
-  "potassium": 48,
-  "temperature": 29,
-  "humidity": 64,
-  "rainfall": 115,
-  "budget": 35000,
-  "market_priority": "Balanced"
-}
-```
+## Planning
+
+The core workflow. Every route here works without an account.
+
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/analysis` | The full workflow: weather, soil, ranked crops, rotation, market and an AI explanation. | No |
+| `POST` | `/finance/season-plan` | Financial Plan | No |
+| `POST` | `/market` | Market | No |
+| `POST` | `/recommendations` | Crop Recommendations | No |
+| `POST` | `/soil` | Soil | No |
+| `POST` | `/weather` | Weather | No |
+
 
 ## Reports
 
-```http
-POST /reports/recommendation
-```
+Downloadable reports. The server recomputes the recommendation from the farm profile, so a client cannot make a branded report claim numbers of its own choosing.
 
-Returns a text report for the submitted farm profile.
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/reports/pdf` | Report Pdf | No |
+| `POST` | `/reports/recommendation` | Report | No |
 
-```http
-POST /reports/pdf
-```
 
-Returns a themed PDF for the current profile-specific snapshot. Its body contains `farm`, the
-backend `recommendation`, optional `weather` and `market` source objects, and an optional
-`finance` plan returned by `POST /finance/season-plan`. The report includes the financial
-summary, tracked expense table, and risk scenarios when finance data is supplied.
+## Advisory
 
-## Advisory And Data
+AI-backed routes, rate limited per client. When the provider is not configured they return 503 or a clearly-labelled template rather than inventing an answer.
 
-```http
-POST /weather
-POST /soil
-POST /market
-POST /chat
-POST /disease
-```
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/chat` | Chat | No |
+| `POST` | `/disease` | Disease | No |
 
-`POST /recommendations` returns deterministic rankings plus an optional Gemini
-`ai_explanation`. `POST /chat` returns `provider: gemini` when Gemini answered and
-`local_fallback` otherwise. `POST /disease` accepts multipart fields `file` and optional
-`crop`, returning structured Gemini screening fields (`prediction`, `confidence`,
-`observations`, `advisory`, and `urgency`) when configured. It accepts only a valid PNG, JPEG,
-or WebP image up to 8 MB and 20 megapixels; MIME labels alone are not trusted.
-Declared uploads over the limit are rejected before multipart parsing.
 
-`POST /market` and `/analysis` use an optional configured JSON market feed when it returns a
-matching `commodity`/`crop` and `modal_price_per_quintal`/`modal_price` in INR per quintal. Its
-response is labelled `Agmarknet live feed` or `eNAM live feed`; otherwise the API labels the
-curated planning baseline. See `docs/SETUP.md` for the feed contract.
+## Auth
 
-`POST /chat` can also receive an optional `finance` context generated by the season planner. It
-contains only the current crop, planning source, cost/revenue/profit estimate, break-even price,
-and budget gap so the advisor can discuss the current plan without storing financial accounts or
-banking data.
+Farmer accounts. Entirely optional: no planning route requires one.
 
-`POST /finance/season-plan` also accepts an optional `market_price_per_quintal`. It represents a
-farmer-entered, verified local mandi price for that single plan and overrides the baseline/live-feed
-price with the source label `farmer-entered local mandi price`. It is still a planning estimate,
-not a guaranteed selling price.
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `POST` | `/auth/login` | Login | No |
+| `POST` | `/auth/logout` | Logout | No |
+| `GET` | `/auth/me` | Me | Yes |
+| `DELETE` | `/auth/me` | Delete the account and every record owned by it, immediately and irreversibly. | Yes |
+| `PATCH` | `/auth/me` | Update Me | Yes |
+| `POST` | `/auth/password` | Change Password | Yes |
+| `POST` | `/auth/refresh` | Refresh | No |
+| `POST` | `/auth/register` | Register | No |
 
-## Records and privacy
 
-The current tool has no account or shared-history API. Saved crop plans and finance expense
-tracking are stored only in the user's browser on the current device.
+## Records
 
-## Admin And Metadata
+Durable storage, scoped to the signed-in account. Every query filters by owner.
 
-```http
-GET /crops
-GET /admin/summary
-GET /integrations/status
-```
-# Complete farm analysis
+| Method | Path | Purpose | Auth |
+| --- | --- | --- | --- |
+| `GET` | `/finance/plans` | List Finance Plans | Yes |
+| `POST` | `/finance/plans` | Save Finance Plan | Yes |
+| `DELETE` | `/finance/plans/{plan_id}` | Delete Finance Plan | Yes |
+| `POST` | `/plans` | Save Plan | Yes |
+| `GET` | `/plans` | List Plans | Yes |
+| `GET` | `/plans/{plan_id}` | Get Plan | Yes |
+| `DELETE` | `/plans/{plan_id}` | Delete Plan | Yes |
+| `GET` | `/profiles` | List Profiles | Yes |
+| `PUT` | `/profiles` | Create or replace a named farm profile, so field conditions survive a browser change. | Yes |
+| `DELETE` | `/profiles/{profile_id}` | Delete Profile | Yes |
 
-`POST /analysis` is the primary proposal workflow. It accepts the same farm profile as
-`POST /recommendations`, plus `previous_crop`, and returns:
 
-- ranked crop recommendations;
-- expected yield, cost, revenue, profit, margin, market trend, and sustainability score;
-- weather data with a source label;
-- soil-health scoring and pH/NPK actions;
-- market outlook for the top three crops;
-- a Gemini explanation when configured, with a local fallback otherwise.
+---
 
-# Season finance plan
+## Core shapes
 
-`POST /finance/season-plan` accepts a `farm` profile, optional selected `crop`, and optional
-`actual_expenses` object keyed by the returned expense categories. It returns an editable
-season-cost plan, expected revenue and profit, budget gap, break-even price per quintal,
-cash-flow stages, and base/downside scenarios. All values are planning estimates and are not
-lending or investment advice.
+### FarmProfile
+
+Sent to every planning route. All fields are required by the UI; the API supplies defaults.
+
+| Field | Type | Range | Notes |
+| --- | --- | --- | --- |
+| `farmer_name` | string | 1-80 chars | |
+| `location` | string | 2-120 chars | `District, State`, used for weather and mandi lookup |
+| `language` | enum | English, Hindi, Punjabi, Haryanvi | Advisory reply language |
+| `land_size` | number | 0.1-2000 | Acres |
+| `season` | enum | Kharif, Rabi, Annual | |
+| `previous_crop` | enum | `None` or a catalogue crop | Drives rotation scoring |
+| `soil_type` | enum | Alluvial, Clayey, Loamy, Sandy loam, Black | |
+| `irrigation` | enum | Rainfed, Limited, Assured | Decides whether a thirsty crop is possible at all |
+| `ph` | number | 3-10 | |
+| `nitrogen` / `phosphorus` / `potassium` | number | 0-100 | Relative soil-health index, not kg/ha |
+| `temperature` | number | -10 to 55 | Mean growing-season temperature, °C |
+| `humidity` | number | 0-100 | Percent |
+| `rainfall` | number | 0-5000 | **Total for the whole season, in mm** — not per hour or per day |
+| `budget` | number | 0-100000000 | INR |
+| `market_priority` | enum | Balanced, Profit, Sustainability, Water saving | |
+
+### Recommendation
+
+| Field | Meaning |
+| --- | --- |
+| `suitability` | 0-100, with no artificial floor |
+| `verdict` | `strong match` \| `good match` \| `workable with care` \| `marginal` \| `not recommended` |
+| `limiters` | Disqualifying conditions, each of which caps the score on its own |
+| `reasons` / `cautions` | Why it fits, and what to watch |
+| `economics` | `expected_yield_quintal`, `estimated_cost_inr`, `estimated_revenue_inr`, `expected_profit_inr`, each `{low, typical, high}` |
+| `market_price` + `price_basis` | The price used, and whether it is a live mandi price or an announced MSP |
+| `duration_days` | Sowing to harvest |
+| `sustainability_score` | 0-100, responding to the crop *and* the field |
+| `sources` | Citations for the figures used |
+
+The top-level `expected_profit`, `expected_yield`, `estimated_cost` and `estimated_revenue`
+fields are the typical case from `economics`, provided for convenience.
+
+## Errors
+
+| Status | Meaning |
+| --- | --- |
+| `401` | Missing, expired or revoked token. Refresh, or sign in again. |
+| `409` | Conflicts with something already stored (duplicate phone, storage limit reached). |
+| `413` | Request body or upload exceeds the cap. |
+| `415` | Unsupported upload type. Send PNG, JPEG or WebP. |
+| `422` | Validation failed, or a named crop or expense category is not one the product covers. |
+| `429` | Rate limited. Wait for `Retry-After` seconds. |
+| `503` | A feature needs an API key that is not configured, or the database is unreachable. The `detail` names what is missing. |

@@ -1,28 +1,61 @@
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-annapurna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-annapurna}
+      POSTGRES_DB: ${POSTGRES_DB:-annapurna}
+    volumes:
+      - annapurna_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-annapurna} -d ${POSTGRES_DB:-annapurna}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
     environment:
+      APP_ENV: ${APP_ENV:-development}
+      # Compose generates a throwaway secret for local use. A real deployment must set JWT_SECRET;
+      # APP_ENV=production refuses to start without one.
+      JWT_SECRET: ${JWT_SECRET:-local-compose-development-secret-change-me-please}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-annapurna}:${POSTGRES_PASSWORD:-annapurna}@db:5432/${POSTGRES_DB:-annapurna}}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-20}
-      AGMARKNET_SOURCE_URL: ${AGMARKNET_SOURCE_URL:-}
-      ENAM_SOURCE_URL: ${ENAM_SOURCE_URL:-}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:5174,http://localhost:5174}
+      AGMARKNET_API_KEY: ${AGMARKNET_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://127.0.0.1:5174,http://localhost:5174}
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    volumes:
-      - annapurna_data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+    environment:
+      # nginx resolves the backend at request time through these, so the frontend starts even
+      # when the backend is not up yet and recovers on its own when it arrives.
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://backend:8000}
+      DNS_RESOLVER: ${DNS_RESOLVER:-127.0.0.11}
     ports:
       - "5174:80"
     depends_on:
       - backend
+    restart: unless-stopped
 
 volumes:
-  annapurna_data:
+  annapurna_pgdata:

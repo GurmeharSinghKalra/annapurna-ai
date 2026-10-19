@@ -1,0 +1,16 @@
+line-length = 120
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+  "B008",    # FastAPI's Depends()/File() defaults are the documented idiom.
+  "RUF012",  # Mutable class attributes are fine on Pydantic and SQLAlchemy models.
+]
+
+[lint.per-file-ignores]
+# Fixed-width report tables and test fixtures read better unwrapped.
+"app/reports.py" = ["E501"]
+"scripts/generate_api_docs.py" = ["E501"]
+"tests/*" = ["E501", "C408"]
+"migrations/*" = ["E501", "I001"]
