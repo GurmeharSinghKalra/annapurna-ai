@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import httpx
 import pytest
 
@@ -327,3 +329,188 @@ def test_integration_status_reports_what_is_really_connected(client):
     assert status["satellite"]["status"] == "not_implemented"
     for detail in status.values():
         assert detail["effect"], "each entry must say what it changes for the farmer"
+
+
+# --------------------------------------------------------------------- provider selection
+
+
+def test_newest_record_wins_and_an_exact_name_beats_a_near_miss():
+    """A feed page mixes commodities and dates in no guaranteed order. Taking the first parseable
+    record could quote a price from weeks ago, or from a different commodity whose name overlapped."""
+    records = [
+        {"commodity": "Wheat", "modal_price": "2597", "arrival_date": "20/08/2026"},
+        {"commodity": "Wheat Dara", "modal_price": "9999", "arrival_date": "18/10/2026"},
+        {"commodity": "Wheat", "modal_price": "2625", "arrival_date": "09/09/2026"},
+        {"commodity": "Wheat", "modal_price": "2610", "arrival_date": "28/08/2026"},
+    ]
+    best = market_data._match(records, "Wheat")
+    assert best["modal_price"] == "2625", "must be the newest exact match, not the newest overall"
+
+
+def test_arrival_dates_parse_in_the_formats_feeds_actually_use():
+    assert market_data.parse_arrival_date("2026-09-09") == date(2026, 9, 9)
+    assert market_data.parse_arrival_date("09/09/2026") == date(2026, 9, 9)
+    assert market_data.parse_arrival_date("09-09-2026") == date(2026, 9, 9)
+    assert market_data.parse_arrival_date("2026-09-09T18:04:45.274+00:00") == date(2026, 9, 9)
+    assert market_data.parse_arrival_date("not a date") is None
+    assert market_data.parse_arrival_date(None) is None
+
+
+def test_undated_records_never_outrank_dated_ones():
+    records = [
+        {"commodity": "Maize", "modal_price": "1111"},
+        {"commodity": "Maize", "modal_price": "2222", "arrival_date": "01/01/2026"},
+    ]
+    assert market_data._match(records, "Maize")["modal_price"] == "2222"
+
+
+def test_keyless_state_matching_is_forgiving_about_case_and_spacing():
+    assert market_data._keyless_state("punjab") == "Punjab"
+    assert market_data._keyless_state("  Uttar   Pradesh ") == "Uttar Pradesh"
+    assert market_data._keyless_state("Haryana") is None
+    assert market_data._keyless_state("") is None
+
+
+@pytest.mark.allow_http
+async def test_the_keyless_mirror_is_used_when_no_key_is_configured(monkeypatch, client, farm):
+    def handler(url, params):
+        assert "mandi-api" in url, "must call the keyless mirror, not data.gov.in"
+        return FakeResponse(
+            {
+                "success": True,
+                "data": [
+                    {
+                        "state": "Punjab",
+                        "district": "Nawanshahr",
+                        "market": "Nawanshahar APMC",
+                        "commodity": params.get("commodity", "Wheat"),
+                        "variety": "Medium",
+                        "min_price": 2600,
+                        "max_price": 2700,
+                        "modal_price": 2625,
+                        "arrival_date": "2026-09-09",
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setattr(market_data, "settings", reload_settings())
+    install_client(monkeypatch, handler)
+    try:
+        response = client.post(
+            "/market",
+            json={**farm, "location": "Nawanshahr, Punjab", "season": "Rabi", "temperature": 18, "rainfall": 150},
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["modal_price_per_quintal"] == 2625
+        assert body["source"] == market_data.KEYLESS_SOURCE
+        # A state-wide query still names the mandi it came from.
+        assert body["district"] == "Nawanshahr"
+        assert "community mirror" in body["note"].lower()
+    finally:
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        reload_settings()
+
+
+@pytest.mark.allow_http
+async def test_an_official_key_takes_precedence_over_the_mirror(monkeypatch, client, farm):
+    seen = []
+
+    def handler(url, params):
+        seen.append(url)
+        return FakeResponse(
+            {
+                "records": [
+                    {
+                        "commodity": params.get("filters[commodity]", "Wheat"),
+                        "state": "Haryana",
+                        "district": "Sonipat",
+                        "modal_price": "2500",
+                        "arrival_date": "18/10/2026",
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setenv("AGMARKNET_API_KEY", "test-key")
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setattr(market_data, "settings", reload_settings())
+    install_client(monkeypatch, handler)
+    try:
+        response = client.post("/market", json=farm)
+        assert response.status_code == 200
+        assert response.json()["source"] == market_data.AGMARKNET_SOURCE
+        assert all("data.gov.in" in url for url in seen), seen
+    finally:
+        monkeypatch.delenv("AGMARKNET_API_KEY", raising=False)
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        reload_settings()
+
+
+@pytest.mark.allow_http
+async def test_a_state_the_mirror_does_not_cover_refuses_instead_of_inventing(monkeypatch, client, farm):
+    def handler(url, params):
+        raise AssertionError("must not call the network for an uncovered state")
+
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setattr(market_data, "settings", reload_settings())
+    install_client(monkeypatch, handler)
+    try:
+        response = client.post("/market", json={**farm, "location": "Sonipat, Haryana"})
+        assert response.status_code == 503
+        detail = response.json()["detail"]
+        assert "AGMARKNET_API_KEY" in detail
+        assert "Haryana" in detail
+    finally:
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        reload_settings()
+
+
+@pytest.mark.allow_http
+async def test_a_failed_lookup_is_remembered_so_it_is_not_retried_every_time(monkeypatch, client, farm):
+    """Without this, a crop the feed never reports spends a fresh upstream request on every
+    analysis — which is how a shared keyless quota gets exhausted."""
+    calls = {"n": 0}
+
+    def handler(url, params):
+        calls["n"] += 1
+        return FakeResponse({"success": True, "data": []})
+
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setattr(market_data, "settings", reload_settings())
+    install_client(monkeypatch, handler)
+    try:
+        payload = {**farm, "location": "Nagpur, Maharashtra"}
+        first = client.post("/market", json=payload)
+        assert first.status_code == 503
+        after_first = calls["n"]
+        assert after_first > 0
+
+        for _ in range(3):
+            assert client.post("/market", json=payload).status_code == 503
+        assert calls["n"] == after_first, "repeat lookups must be served from the miss cache"
+    finally:
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        reload_settings()
+
+
+def test_status_reports_the_keyless_fallback_distinctly(client, monkeypatch):
+    from app import integrations
+
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setattr(integrations, "settings", reload_settings())
+    try:
+        market = integration_status_market(client)
+        assert market["status"] == "keyless_fallback"
+        assert "AGMARKNET_API_KEY" in market["effect"]
+    finally:
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        reload_settings()
+
+
+def integration_status_market(client) -> dict:
+    from app.integrations import integration_status
+
+    return integration_status()["market"]

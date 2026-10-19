@@ -28,6 +28,7 @@ os.environ.update(
     OPENWEATHER_API_KEY="",
     GEMINI_API_KEY="",
     AGMARKNET_API_KEY="",
+    KEYLESS_MARKET_FALLBACK="false",
     AGMARKNET_SOURCE_URL="",
     ENAM_SOURCE_URL="",
     CORS_ORIGINS="http://127.0.0.1:5173,http://localhost:5173",
@@ -67,6 +68,16 @@ def no_outbound_http(monkeypatch, request):
 def no_live_gemini(monkeypatch):
     """Keep every test deterministic and off the billing meter."""
     monkeypatch.setattr(gemini_service, "client", None)
+
+
+@pytest.fixture(autouse=True)
+def reset_market_misses():
+    """The negative-lookup cache is process-global; one test's miss must not shadow another."""
+    from app.market_data import clear_miss_cache
+
+    clear_miss_cache()
+    yield
+    clear_miss_cache()
 
 
 @pytest.fixture(autouse=True)

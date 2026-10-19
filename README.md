@@ -82,12 +82,31 @@ rather than a fake one.
 
 | Key | Where to get it | With it | Without it |
 | --- | --- | --- | --- |
-| `AGMARKNET_API_KEY` | [data.gov.in](https://data.gov.in) — free | Crop economics use the current daily modal price for the farmer's district, cached and with a measured price trend | Economics use announced MSP, labelled as MSP; `/market` returns 503 explaining what is missing |
+| `AGMARKNET_API_KEY` | [data.gov.in](https://data.gov.in) — free | Every state, district-level daily modal prices, a measured trend, and a quota of your own | A keyless community mirror of the same government dataset covers 5 states out of the box (see below); elsewhere, labelled MSP |
 | `OPENWEATHER_API_KEY` | [openweathermap.org](https://openweathermap.org/api) — free tier | Live temperature, humidity and a five-day rain outlook | Weather screens show the farmer's entered values, explicitly labelled as their own input |
 | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) — free tier | Recommendation explanations, advisory chat, crop-image screening | Advisor uses a fixed template that states it is not an answer; image screening returns 503 rather than inventing a diagnosis |
 | `JWT_SECRET` | `python -c "import secrets; print(secrets.token_urlsafe(48))"` | Required for accounts in production | Development uses a shared placeholder and logs a warning; `APP_ENV=production` refuses to start |
 
 Keys live in the backend environment only and are never exposed to the browser.
+
+### Mandi prices work without any key
+
+With no `AGMARKNET_API_KEY`, prices fall back to a keyless community mirror of the same
+government dataset, so a fresh clone shows **real mandi prices immediately**:
+
+```
+/analysis  ·  Nagpur, Maharashtra  ·  no API keys configured
+
+  LIVE  Cotton    92%  strong match        INR 8800/q   <- APMC Kinwat, Nanded, 2026-10-16
+  LIVE  Rice      62%  workable with care  INR 3875/q
+  LIVE  Maize     57%  workable with care  INR 2600/q
+  MSP   Sugarcane 71%  good match          INR  360/q   <- no live price, labelled as MSP
+```
+
+The mirror covers Karnataka, Madhya Pradesh, Maharashtra, Punjab and Uttar Pradesh only, is
+state-level rather than district-level, and shares one rate limit across all its users. Anything
+it cannot answer falls back to a clearly-labelled support price rather than a guess. Get the free
+official key for full coverage, including Haryana.
 
 ---
 

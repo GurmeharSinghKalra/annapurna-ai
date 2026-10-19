@@ -121,6 +121,13 @@ class Settings:
     market_cache_ttl_minutes: float = field(default_factory=lambda: _number("MARKET_CACHE_TTL_MINUTES", 180))
     market_trend_window_days: int = field(default_factory=lambda: _whole("MARKET_TREND_WINDOW_DAYS", 14, 2))
     market_trend_min_points: int = field(default_factory=lambda: _whole("MARKET_TREND_MIN_POINTS", 3, 2))
+    # A keyless community mirror of the government mandi dataset, so the product shows real
+    # prices before anyone registers for a key. Narrower coverage and a shared rate limit, so a
+    # configured AGMARKNET_API_KEY always takes precedence. Set false to use only official feeds.
+    keyless_market_fallback: bool = field(default_factory=lambda: _flag("KEYLESS_MARKET_FALLBACK", True))
+    # How long a "no price for this crop here" result is remembered, so an uncovered crop does not
+    # spend a fresh upstream request on every analysis.
+    market_miss_ttl_seconds: float = field(default_factory=lambda: _number("MARKET_MISS_TTL_SECONDS", 1_800))
 
     # --- database ---------------------------------------------------------------
     database_url: str = field(default_factory=lambda: _text("DATABASE_URL") or _default_database_url())

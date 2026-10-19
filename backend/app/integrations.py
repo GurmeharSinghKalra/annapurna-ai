@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from .config import settings
 from .gemini_service import gemini_service
-from .market_data import LiveMarketDataUnavailable  # re-exported for callers and tests
+from .market_data import KEYLESS_STATES, LiveMarketDataUnavailable  # re-exported for callers and tests
 from .schemas import FarmProfile
 
 __all__ = ["LiveMarketDataUnavailable", "integration_status", "soil_profile"]
@@ -23,6 +23,31 @@ def _band(value: float) -> str:
         if low <= value < high:
             return label
     return "high"
+
+
+def _market_status() -> dict:
+    """Mandi prices come from the official feed, a keyless mirror, or neither."""
+    if settings.agmarknet_api_key:
+        return {
+            "provider": "AGMARKNET daily mandi prices (data.gov.in)",
+            "status": "connected",
+            "effect": "Crop economics use the current modal price for your district, with a measured trend.",
+        }
+    if settings.keyless_market_fallback:
+        return {
+            "provider": f"Community mirror of AGMARKNET ({', '.join(sorted(KEYLESS_STATES))} only)",
+            "status": "keyless_fallback",
+            "effect": (
+                "Real mandi prices without any setup, for the states the mirror covers. "
+                "Add a free AGMARKNET_API_KEY from data.gov.in for every state, district-level "
+                "prices and a dedicated rate limit."
+            ),
+        }
+    return {
+        "provider": "AGMARKNET daily mandi prices (data.gov.in)",
+        "status": "no_api_key",
+        "effect": "Crop economics use announced support prices, clearly labelled as MSP, not a sale price.",
+    }
 
 
 def integration_status() -> dict:
@@ -42,15 +67,7 @@ def integration_status() -> dict:
                 else "Weather screens show the values you typed, labelled as your own input."
             ),
         },
-        "market": {
-            "provider": "AGMARKNET daily mandi prices (data.gov.in)",
-            "status": "connected" if settings.agmarknet_api_key else "no_api_key",
-            "effect": (
-                "Crop economics use the current modal price for your district."
-                if settings.agmarknet_api_key
-                else "Crop economics use announced support prices, clearly labelled as MSP, not a sale price."
-            ),
-        },
+        "market": _market_status(),
         "generative_ai": {
             "provider": "Google Gemini",
             "status": "connected" if settings.gemini_api_key else "no_api_key",

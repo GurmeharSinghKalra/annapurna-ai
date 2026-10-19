@@ -27,8 +27,39 @@ routinely sell below MSP outside procurement windows.
 | Sugarcane | 360 | Fair and Remunerative Price basis; state advised prices differ |
 | Pearl Millet | 2,900 | MSP, bajra, Kharif 2026-27 |
 
-When `AGMARKNET_API_KEY` is configured, a live daily modal price from the farmer's district
-replaces the reference price and `price_basis` changes to `live mandi modal price`.
+When a live price is available it replaces the reference price and `price_basis` changes to
+`live mandi modal price`.
+
+### Where a live price comes from
+
+Prices are resolved in this order, and the response always says which one answered:
+
+1. **AGMARKNET via data.gov.in**, when `AGMARKNET_API_KEY` is set. The official feed: every
+   state, district-level prices, and a quota of your own. Free, registration only.
+2. **A keyless community mirror** of the same government dataset, when no key is configured.
+   Covers Karnataka, Madhya Pradesh, Maharashtra, Punjab and Uttar Pradesh only, state-level
+   rather than district-level, rate limited to 100 requests per 15 minutes shared across all its
+   users, and with no uptime guarantee. It exists so a fresh clone shows real prices rather than
+   nothing. Disable with `KEYLESS_MARKET_FALLBACK=false`.
+3. **The announced support price**, clearly labelled as MSP.
+
+Two details that matter for correctness:
+
+- **The newest record wins.** A page from either feed mixes commodities and arrival dates in no
+  guaranteed order, so taking the first parseable record could quote a price from weeks ago — or
+  from a different commodity whose name merely overlapped. Exact commodity matches beat partial
+  ones, and within each group the latest arrival date wins.
+- **Failures are remembered briefly.** A crop a feed does not report would otherwise cost a fresh
+  upstream request on every analysis, which is how a shared quota gets exhausted. Misses are
+  cached for `MARKET_MISS_TTL_SECONDS` (default 30 minutes).
+
+### Commodity naming
+
+AGMARKNET filters are exact-match and the dataset does not use everyday crop names. Filtering on
+`Rice` returns nothing; the dataset calls it `Paddy(Dhan)(Common)`. Each crop therefore carries an
+ordered list of the dataset's own spellings in `market_data.COMMODITY_CANDIDATES`, tried until one
+reports a price. This was a live bug: before it was fixed, every official price lookup would have
+silently returned no data.
 
 **These must be rechecked every season.** `crop_data.PRICE_SEASON` and `LAST_REVIEWED` record
 which season the table belongs to, and both are returned by the API.

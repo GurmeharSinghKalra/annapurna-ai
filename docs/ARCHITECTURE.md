@@ -70,6 +70,13 @@ non-monotonic across plot sizes: 0.1 and 0.2 acre of mustard both reported ₹2,
 `Paddy(Dhan)(Common)`, so an exact-match filter on "Rice" returns nothing — and narrows from
 district to state to nationwide until a price is found.
 
+Providers are tried in order: the official data.gov.in feed when a key is configured, then a
+keyless community mirror of the same dataset (5 states, state-level, shared rate limit), then a
+labelled support price. One function, `fetch_from_best_provider`, makes that choice, so the
+single-crop and bulk paths cannot diverge. Within a page of results the newest record for an
+exact commodity match wins, and failed lookups are remembered briefly so a crop a feed does not
+carry cannot drain a shared quota.
+
 Prices are cached per `(commodity, state, district)` so a hundred farmers in one district cost
 one upstream request, and each observation is appended to a history table. Price direction is
 **measured** from that history; until there are enough points the API says
