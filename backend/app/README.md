@@ -4,14 +4,15 @@ This directory contains the domain logic behind Annapurna AI. Each module has on
 
 | Module | Role | Key entry points |
 | --- | --- | --- |
-| `main.py` | FastAPI application and REST endpoints. | `/analysis`, `/recommendations`, `/chat`, `/disease`, auth, reports, history. |
+| `main.py` | FastAPI application and REST endpoints. | `/analysis`, `/recommendations`, `/finance/season-plan`, `/chat`, `/disease`, reports. |
 | `schemas.py` | Request and response contracts. | `FarmProfile`, `Recommendation`, `ChatRequest`. |
 | `recommender.py` | Transparent crop scoring, prior-crop rotation, economics, market baseline, and sustainability metrics. | `recommend`, `crop_catalog`. |
-| `ml_model.py` | Optional scikit-learn classifier loader and prediction helper. | `predict_crop`, `model_available`. |
+| `ml_model.py` | Cached optional scikit-learn classifier loader with a rule-based failure fallback. | `predict_crop`, `model_available`. |
 | `integrations.py` | Weather, soil-health, market, and integration-status adapters. | `fetch_weather`, `soil_profile`, `market_profile`. |
+| `finance.py` | Season cost allocation, cash flow, break-even, and scenario calculations. | `season_financial_plan`. |
 | `gemini_service.py` | Gemini explanation, multilingual chat, and image-screening boundary. | `GeminiService`. |
 | `advisory.py` | Offline English, Hindi, Punjabi, and Haryanvi advisory responses. | `localized_chat_answer`. |
-| `database.py` | SQLite user and recommendation-history persistence. | `create_user`, `authenticate_user`, `save_history_record`. |
+| `database.py` | Legacy prototype persistence module; it is not exposed by the current no-account API. | No active route. |
 | `reports.py` | Plain-text crop-plan export generated from the recommendation engine. | `recommendation_report`. |
 | `config.py` | Environment-based settings. | `settings`. |
 

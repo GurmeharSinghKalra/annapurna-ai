@@ -1,10 +1,11 @@
 import json
 import logging
+import asyncio
 
 from pydantic import BaseModel, Field
 
 from .config import settings
-from .schemas import FarmProfile, Recommendation
+from .schemas import FarmProfile, FinanceContext, Recommendation
 
 try:
     from google import genai
@@ -49,6 +50,7 @@ class GeminiService:
         crop: str,
         farm: FarmProfile,
         recommendation: Recommendation,
+        finance: FinanceContext | None = None,
     ) -> str | None:
         if not self.client:
             return None
@@ -59,24 +61,29 @@ Preferred response language: {farm.language}
 Current crop: {crop}
 Farm profile: {json.dumps(farm.model_dump(), ensure_ascii=False)}
 Current recommendation: {json.dumps(recommendation.model_dump(), ensure_ascii=False)}
+Current season finance plan: {json.dumps(finance.model_dump(), ensure_ascii=False) if finance else "not created"}
 
 Answer the farmer's actual question directly. Use the farm data when relevant.
 Keep the answer under 180 words, use plain language, and distinguish facts from estimates.
-Do not invent live weather, market prices, diagnoses, pesticide products, or chemical dosages.
+Do not invent live weather, market prices, diagnoses, pesticide products, chemical dosages, loans,
+credit products, or investment returns. Treat every finance value as a planning estimate.
 For treatment, safety, or high-cost decisions, recommend confirmation with a qualified local expert.
 """.strip()
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=settings.gemini_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=(
-                        "You are Annapurna AI, a careful agricultural decision-support assistant for Indian farmers. "
-                        "Be practical, concise, respectful, and transparent about uncertainty."
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=(
+                            "You are Annapurna AI, a careful agricultural decision-support assistant for Indian farmers. "
+                            "Be practical, concise, respectful, and transparent about uncertainty."
+                        ),
+                        max_output_tokens=500,
                     ),
-                    max_output_tokens=500,
                 ),
+                timeout=settings.gemini_timeout_seconds,
             )
             return response.text.strip() if response.text else None
         except Exception as exc:  # Network, quota, safety, and model errors use the local fallback.
@@ -102,15 +109,18 @@ Use the farmer's preferred language ({farm.language}) while keeping crop names r
 """.strip()
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=settings.gemini_model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction="You explain deterministic agricultural recommendations without changing their ranking.",
-                    response_mime_type="application/json",
-                    response_schema=RecommendationInsight,
-                    max_output_tokens=450,
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction="You explain deterministic agricultural recommendations without changing their ranking.",
+                        response_mime_type="application/json",
+                        response_schema=RecommendationInsight,
+                        max_output_tokens=450,
+                    ),
                 ),
+                timeout=settings.gemini_timeout_seconds,
             )
             if isinstance(response.parsed, RecommendationInsight):
                 return response.parsed
@@ -139,18 +149,21 @@ unclear or not a crop leaf, say so explicitly and lower confidence.
 """.strip()
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=settings.gemini_model,
-                contents=[prompt, types.Part.from_bytes(data=image_bytes, mime_type=mime_type)],
-                config=types.GenerateContentConfig(
-                    system_instruction=(
-                        "You are a cautious multimodal crop-health screening assistant. "
-                        "Your output supports, but never replaces, diagnosis by a qualified agriculture expert."
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=settings.gemini_model,
+                    contents=[prompt, types.Part.from_bytes(data=image_bytes, mime_type=mime_type)],
+                    config=types.GenerateContentConfig(
+                        system_instruction=(
+                            "You are a cautious multimodal crop-health screening assistant. "
+                            "Your output supports, but never replaces, diagnosis by a qualified agriculture expert."
+                        ),
+                        response_mime_type="application/json",
+                        response_schema=DiseaseAnalysis,
+                        max_output_tokens=600,
                     ),
-                    response_mime_type="application/json",
-                    response_schema=DiseaseAnalysis,
-                    max_output_tokens=600,
                 ),
+                timeout=settings.gemini_timeout_seconds,
             )
             if isinstance(response.parsed, DiseaseAnalysis):
                 return response.parsed

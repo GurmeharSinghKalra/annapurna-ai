@@ -3,7 +3,8 @@ import hashlib
 import secrets
 from pathlib import Path
 
-from .schemas import HistoryRecord, UserCreate
+# This module is retained only to avoid breaking old local prototype databases. The active
+# no-account product does not import it or expose any route that reads these records.
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 DB_PATH = DATA_DIR / "annapurna_ai.sqlite"
@@ -61,7 +62,7 @@ def _verify_password(password: str, stored: str) -> bool:
     return secrets.compare_digest(candidate.hex(), digest)
 
 
-def create_user(user: UserCreate) -> dict:
+def create_user(user) -> dict:
     with get_connection() as connection:
         cursor = connection.execute(
             """
@@ -98,7 +99,7 @@ def authenticate_user(phone: str, password: str) -> dict | None:
     return result
 
 
-def save_history_record(record: HistoryRecord) -> dict:
+def save_history_record(record) -> dict:
     with get_connection() as connection:
         cursor = connection.execute(
             """

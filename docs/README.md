@@ -10,5 +10,6 @@ The `docs/` directory describes how to run, understand, present, and extend Anna
 | `TESTING.md` | Automated and manual verification procedure. |
 | `DEFENSE_GUIDE.md` | Project presentation and viva preparation. |
 | `ROADMAP.md` | Future production phases and external-integration work. |
+| `PRODUCT_GAP_AUDIT.md` | Current product boundaries, safeguards, and the approved build sequence. |
 
 At the repository root, `PROPOSAL_COVERAGE.md` maps every proposal objective to the working implementation and states which data sources still need official production credentials.

@@ -18,9 +18,10 @@ See `PROPOSAL_COVERAGE.md` for a requirement-by-requirement implementation map.
 
 - React frontend dashboard for farmer profile, soil, weather, nutrients, budget, and season inputs.
 - One complete farm analysis joining soil health, weather, rotation-aware crop ranking, market outlook, yield, cost, revenue, profit margin, water demand, and sustainability scoring.
-- Weather, market, Gemini advisor, Gemini multimodal disease screening, saved history, data-source, and ethics/compliance sections.
+- Season Finance workspace with category-wise crop budgeting, actual expense tracking, working-capital gap, break-even price, cash-flow timeline, and downside profitability scenarios.
+- Weather, market, Gemini advisor, Gemini multimodal disease screening, device-local saved plans, data-source, and ethics/compliance sections.
 - FastAPI backend with Gemini-powered recommendation explanations, multilingual chat, and crop-image screening.
-- SQLite prototype persistence for saved recommendation history.
+- Device-local recommendation history, so the no-account workflow does not share farm records between users.
 - Trainable scikit-learn crop recommendation pipeline with a starter dataset.
 - Docker Compose setup for frontend and backend.
 - PWA metadata for mobile installability.
@@ -65,16 +66,13 @@ GET  /admin/summary
 GET  /integrations/status
 POST /recommendations
 POST /analysis
+POST /finance/season-plan
 POST /reports/recommendation
-POST /auth/register
-POST /auth/login
 POST /weather
 POST /soil
 POST /market
 POST /chat
 POST /disease
-GET  /history
-POST /history
 ```
 
 ## Environment

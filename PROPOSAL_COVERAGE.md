@@ -8,7 +8,7 @@ This document maps the project proposal to the current implementation.
 | --- | --- |
 | User-friendly web interface | React/Vite dashboard in `src/main.jsx` with responsive CSS in `src/styles.css`. |
 | Mobile-friendly experience | PWA manifest, icon, service worker, and responsive mobile layout. |
-| User authentication and management | FastAPI `/auth/register` and `/auth/login`; SQLite `users` table with password hashing. |
+| User authentication and management | Intentionally deferred: the current tool is a no-account, single-device workspace. |
 | Crop recommendation engine | `backend/app/recommender.py` plus trainable scikit-learn model in `backend/scripts/train_model.py`. |
 | Soil, weather, and crop input capture | Frontend farm profile form; backend `FarmProfile` schema. |
 | Yield/profit/sustainability outputs | Recommendation cards and `/analysis` return estimated cost, revenue, profit, margin, yield, water demand, and a numeric sustainability score. |
@@ -19,7 +19,7 @@ This document maps the project proposal to the current implementation.
 | Market data integration | `/market` and `/analysis` expose commodity names, planning prices, trends, and official-feed adapter status for Agmarknet/eNAM. |
 | Multilingual chatbot | Gemini-backed `/chat` with correctly encoded English, Hindi, Punjabi, and Haryanvi fallbacks. |
 | Crop disease detection module | Frontend image upload and backend `/disease` route with prototype screening response. |
-| Farmer history | SQLite-backed `/history` endpoints and frontend saved history panel. |
+| Farmer history | Browser-local saved plans; no shared farmer history is exposed without scoped identity. |
 | Reports | Frontend text report export and backend `/reports/recommendation`. |
 | Admin/status view | Frontend admin panel plus `/admin/summary`, `/crops`, and `/integrations/status`. |
 | Docker/cloud readiness | `Dockerfile.frontend`, `backend/Dockerfile`, and `docker-compose.yml`. |

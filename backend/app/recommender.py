@@ -11,7 +11,6 @@ CROPS = [
         "temperature": [22, 36],
         "ph": [5.5, 7],
         "water": "High",
-        "base_profit": 42000,
         "cost": 32000,
         "market_price": 2350,
         "market_trend": 2.4,
@@ -28,7 +27,6 @@ CROPS = [
         "temperature": [18, 32],
         "ph": [5.8, 7.5],
         "water": "Medium",
-        "base_profit": 36000,
         "cost": 26000,
         "market_price": 2250,
         "market_trend": 4.1,
@@ -45,7 +43,6 @@ CROPS = [
         "temperature": [21, 35],
         "ph": [6, 8],
         "water": "Medium",
-        "base_profit": 52000,
         "cost": 39000,
         "market_price": 7100,
         "market_trend": -1.2,
@@ -62,7 +59,6 @@ CROPS = [
         "temperature": [10, 25],
         "ph": [6, 7.8],
         "water": "Medium",
-        "base_profit": 38500,
         "cost": 28500,
         "market_price": 2425,
         "market_trend": 1.8,
@@ -79,7 +75,6 @@ CROPS = [
         "temperature": [10, 26],
         "ph": [6, 8],
         "water": "Low",
-        "base_profit": 33000,
         "cost": 22000,
         "market_price": 5650,
         "market_trend": 3.3,
@@ -96,7 +91,6 @@ CROPS = [
         "temperature": [15, 30],
         "ph": [6, 8.2],
         "water": "Low",
-        "base_profit": 34500,
         "cost": 23500,
         "market_price": 5900,
         "market_trend": 2.7,
@@ -113,7 +107,6 @@ CROPS = [
         "temperature": [21, 38],
         "ph": [6, 8],
         "water": "Very high",
-        "base_profit": 65000,
         "cost": 62000,
         "market_price": 360,
         "market_trend": 0.9,
@@ -130,7 +123,6 @@ CROPS = [
         "temperature": [25, 40],
         "ph": [6, 8.5],
         "water": "Low",
-        "base_profit": 28000,
         "cost": 18500,
         "market_price": 2650,
         "market_trend": 5.2,
@@ -171,6 +163,11 @@ def recommend(farm: FarmProfile) -> list[Recommendation]:
         score = 30.0
         reasons: list[str] = []
         cautions: list[str] = []
+        estimated_cost = round(crop["cost"] * farm.land_size)
+        expected_yield = round(crop["yield"] * farm.land_size)
+        estimated_revenue = round(expected_yield * crop["market_price"])
+        expected_profit = estimated_revenue - estimated_cost
+        profit_per_acre = (crop["yield"] * crop["market_price"]) - crop["cost"]
 
         if crop["season"] == farm.season or crop["season"] == "Annual":
             score += 18
@@ -198,7 +195,7 @@ def recommend(farm: FarmProfile) -> list[Recommendation]:
         else:
             cautions.append("Nutrient correction is needed")
 
-        if farm.market_priority == "Profit" and crop["base_profit"] > 40000:
+        if farm.market_priority == "Profit" and profit_per_acre > 40000:
             score += 6
         if farm.market_priority == "Sustainability" and crop["water"] == "Low":
             score += 7
@@ -215,11 +212,10 @@ def recommend(farm: FarmProfile) -> list[Recommendation]:
             score += 8 + (confidence * 6)
             reasons.insert(0, "ML model selected this crop")
 
+        if farm.budget < estimated_cost:
+            score -= 5
+            cautions.append("Available budget is below the estimated cultivation cost")
         suitability = int(max(36, min(98, round(score))))
-        budget_factor = 1 if farm.budget >= crop["base_profit"] * 0.55 else 0.86
-        estimated_cost = round(crop["cost"] * farm.land_size)
-        expected_profit = round(crop["base_profit"] * farm.land_size * budget_factor)
-        estimated_revenue = estimated_cost + expected_profit
         profit_margin = round((expected_profit / estimated_revenue) * 100) if estimated_revenue else 0
         water_score = {"Low": 28, "Medium": 21, "High": 12, "Very high": 6}[crop["water"]]
         rotation_score = 12 if crop["crop"] in ROTATION_MATCHES.get(farm.previous_crop, set()) else 7
@@ -232,7 +228,7 @@ def recommend(farm: FarmProfile) -> list[Recommendation]:
                 reasons=reasons[:4],
                 cautions=cautions[:3] or ["No major warning from current inputs"],
                 expected_profit=expected_profit,
-                expected_yield=round(crop["yield"] * farm.land_size),
+                expected_yield=expected_yield,
                 estimated_cost=estimated_cost,
                 estimated_revenue=estimated_revenue,
                 profit_margin=profit_margin,

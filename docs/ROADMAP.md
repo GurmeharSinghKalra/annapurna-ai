@@ -7,12 +7,11 @@ Completed:
 - Farm input form
 - Crop recommendations
 - Rule-based and ML-assisted scoring
-- Farmer accounts
-- Recommendation history
+- Device-local recommendation history
 - Report export
 - Gemini advisor with local fallback
 - Gemini multimodal disease screening with local fallback
-- Admin/status panel
+- System-status panel
 - PWA and Docker setup
 
 ## Phase 2: Data Quality
@@ -40,6 +39,5 @@ Completed:
 
 - Deploy backend to cloud.
 - Deploy frontend to static hosting.
-- Add authentication tokens.
-- Add database backups.
+- Decide whether a future multi-device product needs scoped identity and encrypted persistence.
 - Add analytics and monitoring.

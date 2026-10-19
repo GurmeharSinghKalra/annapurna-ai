@@ -6,7 +6,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| `main.jsx` | Routes, UI components, local fallback ranking, API calls, account state, report export, and accessibility labels. |
+| `main.jsx` | Routes, UI components, local fallback ranking, API calls, device-local records, report export, and accessibility labels. |
 | `styles.css` | Responsive visual system, typography, desktop sidebar, mobile navigation, panels, inputs, and state styles. |
 
 ## Routes
@@ -15,13 +15,13 @@
 | --- | --- |
 | `/` | Landing page explaining the product and its safeguards. |
 | `/about` | Project scope, architecture, and responsible-use information. |
-| `/register`, `/login` | Farmer account registration and sign-in. |
+| `/register`, `/login` | Legacy entry URLs that explain the no-account guest workspace. |
 | `/dashboard` | Current crop recommendation and quick actions. |
 | `/planner` | Farm inputs, prior-crop rotation context, ranked crop options, and complete analysis trigger. |
 | `/insights` | Soil health, weather, economics, market outlook, rotation, and sustainability output. |
 | `/disease` | Gemini-backed crop image screening with a safe fallback. |
 | `/advisor` | Context-aware multilingual agricultural chat. |
-| `/records` | Saved recommendation history. |
+| `/records` | Saved recommendation history stored in this browser on this device. |
 | `/settings` | Integration status, exports, and safety information. |
 
 ## Data flow
@@ -30,7 +30,9 @@
 2. The planner calls `POST /analysis` through `API_BASE`.
 3. The returned recommendations are normalized for presentation components.
 4. The Insights page reads weather, soil, and market objects from that same analysis.
-5. When the API is unavailable, local deterministic ranking and advisory text keep the interface usable.
+5. Saved plans and finance expense tracking use browser storage, so no account or shared history is required.
+   The Records and System pages include controls to remove that device-local data.
+6. When the API is unavailable, local deterministic ranking and advisory text keep the interface usable.
 
 Set `VITE_API_URL` when deploying the frontend separately. Without it, the development client uses `http://127.0.0.1:8000`.
 

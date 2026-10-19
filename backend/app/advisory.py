@@ -1,4 +1,4 @@
-from .schemas import FarmProfile
+from .schemas import FarmProfile, FinanceContext
 
 
 LANGUAGE_PREFIX = {
@@ -9,7 +9,7 @@ LANGUAGE_PREFIX = {
 }
 
 
-def localized_chat_answer(crop: str, farm: FarmProfile, advisory: str, rotation: str, expected_profit: int) -> str:
+def localized_chat_answer(crop: str, farm: FarmProfile, advisory: str, rotation: str, expected_profit: int, finance: FinanceContext | None = None) -> str:
     language = farm.language or "English"
     if language == "Hindi":
         return (
@@ -26,7 +26,13 @@ def localized_chat_answer(crop: str, farm: FarmProfile, advisory: str, rotation:
             f"Salah: {crop} teri mitti, mausam aur budget ke hisaab te theek fasal se. "
             f"{advisory} Fasal rotation: {rotation} Expected return INR {expected_profit:,}."
         )
-    return (
+    response = (
         f"Advisory: {crop} is a strong match for the current soil, weather, and budget. "
         f"{advisory} Crop rotation: {rotation} Expected return INR {expected_profit:,}."
     )
+    if finance:
+        response += (
+            f" Your current season plan estimates INR {finance.expected_profit:,} profit and a break-even "
+            f"price of INR {finance.break_even_price_per_quintal}/quintal; verify the selling price before acting."
+        )
+    return response

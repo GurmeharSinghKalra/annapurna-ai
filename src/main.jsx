@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -16,8 +16,6 @@ import {
   IndianRupee,
   Leaf,
   LineChart,
-  Lock,
-  LogOut,
   MapPin,
   MessageSquareText,
   Save,
@@ -26,12 +24,15 @@ import {
   ShieldCheck,
   Sprout,
   Upload,
-  UserRound,
+  Wallet,
   Wheat
 } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+// Development talks directly to FastAPI; the production container proxies `/api` to it.
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api');
+const FINANCE_STORAGE_KEY = 'annapurna-season-finance-v1';
+const HISTORY_STORAGE_KEY = 'annapurna-saved-plans-v1';
 
 const crops = [
   {
@@ -43,7 +44,8 @@ const crops = [
     temperature: [22, 36],
     ph: [5.5, 7],
     water: 'High',
-    baseProfit: 42000,
+    cost: 32000,
+    marketPrice: 2350,
     yield: 28,
     sustainability: 'Use alternate wetting and drying to reduce water use.',
     rotation: 'Follow with lentil, pea, or mustard.',
@@ -58,7 +60,8 @@ const crops = [
     temperature: [18, 32],
     ph: [5.8, 7.5],
     water: 'Medium',
-    baseProfit: 36000,
+    cost: 26000,
+    marketPrice: 2250,
     yield: 24,
     sustainability: 'Moderate water demand and good fit for diversified farms.',
     rotation: 'Rotate with gram, pea, or vegetables.',
@@ -73,7 +76,8 @@ const crops = [
     temperature: [21, 35],
     ph: [6, 8],
     water: 'Medium',
-    baseProfit: 52000,
+    cost: 39000,
+    marketPrice: 7100,
     yield: 16,
     sustainability: 'Needs pest monitoring; avoid repeated cotton on the same field.',
     rotation: 'Rotate with wheat, gram, or sorghum.',
@@ -88,7 +92,8 @@ const crops = [
     temperature: [10, 25],
     ph: [6, 7.8],
     water: 'Medium',
-    baseProfit: 38500,
+    cost: 28500,
+    marketPrice: 2425,
     yield: 25,
     sustainability: 'Works well in rotation after rice or maize.',
     rotation: 'Follow with mung bean, fodder, or maize.',
@@ -103,7 +108,8 @@ const crops = [
     temperature: [10, 26],
     ph: [6, 8],
     water: 'Low',
-    baseProfit: 33000,
+    cost: 22000,
+    marketPrice: 5650,
     yield: 11,
     sustainability: 'Good low-water option for winter season.',
     rotation: 'Follow after rice, maize, or pearl millet.',
@@ -118,7 +124,8 @@ const crops = [
     temperature: [15, 30],
     ph: [6, 8.2],
     water: 'Low',
-    baseProfit: 34500,
+    cost: 23500,
+    marketPrice: 5900,
     yield: 13,
     sustainability: 'Adds nitrogen to soil and reduces fertilizer dependency.',
     rotation: 'Best after wheat, rice, or maize.',
@@ -133,7 +140,8 @@ const crops = [
     temperature: [21, 38],
     ph: [6, 8],
     water: 'Very high',
-    baseProfit: 65000,
+    cost: 62000,
+    marketPrice: 360,
     yield: 360,
     sustainability: 'High return but high water footprint; use drip irrigation where possible.',
     rotation: 'Rotate with pulses or vegetables after ratoon cycle.',
@@ -148,7 +156,8 @@ const crops = [
     temperature: [25, 40],
     ph: [6, 8.5],
     water: 'Low',
-    baseProfit: 28000,
+    cost: 18500,
+    marketPrice: 2650,
     yield: 15,
     sustainability: 'Climate-resilient crop for low-rainfall regions.',
     rotation: 'Rotate with mustard, chickpea, or wheat.',
@@ -157,51 +166,27 @@ const crops = [
 ];
 
 const initialFarm = {
-  farmerName: 'Demo Farmer',
-  phone: '9999999999',
-  location: 'Sonipat, Haryana',
-  language: 'English',
-  landSize: 2,
-  season: 'Kharif',
-  previousCrop: 'None',
-  soilType: 'Alluvial',
-  ph: 6.6,
-  nitrogen: 62,
-  phosphorus: 41,
-  potassium: 48,
-  temperature: 29,
-  humidity: 64,
-  rainfall: 115,
-  budget: 35000,
-  marketPriority: 'Balanced'
-};
-
-const diseaseResults = {
-  Rice: 'Possible early leaf blast risk. Keep canopy airflow high and avoid excess nitrogen.',
-  Maize: 'Possible leaf spot risk. Remove infected residue and monitor lower leaves.',
-  Cotton: 'Possible sucking pest stress. Inspect underside of leaves and use IPM before pesticide.',
-  Wheat: 'Possible rust risk. Monitor yellow/orange streaks and avoid late irrigation on foliage.',
-  Mustard: 'Possible aphid pressure. Check tender shoots during flowering.',
-  Chickpea: 'Possible wilt risk. Improve drainage and rotate away from chickpea next season.',
-  Sugarcane: 'Possible red rot risk. Use healthy seed cane and remove affected clumps.',
-  'Pearl Millet': 'Possible downy mildew risk. Use resistant seed and avoid dense sowing.'
-};
-
-const cropIcons = {
-  Rice: Wheat,
-  Maize: Sprout,
-  Cotton: Sprout,
-  Wheat,
-  Mustard: Leaf,
-  Chickpea: Leaf,
-  Sugarcane: Sprout,
-  'Pearl Millet': Wheat
+  farmerName: '',
+  location: '',
+  language: '',
+  landSize: '',
+  season: '',
+  previousCrop: '',
+  soilType: '',
+  ph: '',
+  nitrogen: '',
+  phosphorus: '',
+  potassium: '',
+  temperature: '',
+  humidity: '',
+  rainfall: '',
+  budget: '',
+  marketPriority: ''
 };
 
 function toApiFarm(farm) {
   return {
     farmer_name: farm.farmerName,
-    phone: farm.phone,
     location: farm.location,
     language: farm.language,
     land_size: Number(farm.landSize),
@@ -224,7 +209,7 @@ function normalizeRecommendation(item) {
   return {
     ...item,
     name: item.name || item.crop,
-    icon: item.icon || cropIcons[item.crop] || Sprout,
+    icon: Sprout,
     water: item.water,
     expectedProfit: item.expectedProfit ?? item.expected_profit,
     expectedYield: item.expectedYield ?? item.expected_yield,
@@ -283,21 +268,31 @@ function scoreCrop(crop, farm) {
     cautions.push('Nutrient correction is needed');
   }
 
-  if (farm.marketPriority === 'Profit' && crop.baseProfit > 40000) score += 6;
+  const landSize = Number(farm.landSize || 1);
+  const expectedYield = Math.round(crop.yield * landSize);
+  const estimatedCost = Math.round(crop.cost * landSize);
+  const estimatedRevenue = Math.round(expectedYield * crop.marketPrice);
+  const expectedProfit = estimatedRevenue - estimatedCost;
+  const profitPerAcre = (crop.yield * crop.marketPrice) - crop.cost;
+
+  if (farm.marketPriority === 'Profit' && profitPerAcre > 40000) score += 6;
   if (farm.marketPriority === 'Sustainability' && crop.water === 'Low') score += 7;
   if (farm.marketPriority === 'Water saving' && ['Low', 'Medium'].includes(crop.water)) score += 7;
 
+  if (Number(farm.budget) < estimatedCost) {
+    score -= 5;
+    cautions.push('Available budget is below the estimated cultivation cost');
+  }
   const suitability = Math.max(36, Math.min(98, Math.round(score)));
-  const landSize = Number(farm.landSize || 1);
-  const budgetFactor = Number(farm.budget) >= crop.baseProfit * 0.55 ? 1 : 0.86;
-  const expectedProfit = Math.round(crop.baseProfit * landSize * budgetFactor);
-  const expectedYield = Math.round(crop.yield * landSize);
 
   return {
     ...crop,
     suitability,
     expectedProfit,
     expectedYield,
+    estimatedCost,
+    estimatedRevenue,
+    profitMargin: estimatedRevenue ? Math.round((expectedProfit / estimatedRevenue) * 100) : 0,
     reasons: reasons.slice(0, 4),
     cautions: cautions.slice(0, 3)
   };
@@ -306,14 +301,12 @@ function scoreCrop(crop, farm) {
 function App() {
   const [route, setRoute] = useState(() => window.location.pathname || '/');
   const [farm, setFarm] = useState(initialFarm);
-  const [authUser, setAuthUser] = useState(null);
-  const [authPassword, setAuthPassword] = useState('secret123');
   const [history, setHistory] = useState([]);
-  const [question, setQuestion] = useState('How should I irrigate the recommended crop?');
+  const [question, setQuestion] = useState('');
   const [chat, setChat] = useState([
     {
       by: 'Annapurna AI',
-      text: 'Enter farm conditions first. I will answer using the top crop, soil, weather, and sustainability rules.'
+      text: 'Complete your farm profile and run analysis before asking for advice.'
     }
   ]);
   const [imageName, setImageName] = useState('');
@@ -324,44 +317,46 @@ function App() {
   const [diseaseAdvisory, setDiseaseAdvisory] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [financialPlan, setFinancialPlan] = useState(null);
+  const [actualExpenses, setActualExpenses] = useState({});
+  const [manualMarketPrice, setManualMarketPrice] = useState('');
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [cropNames, setCropNames] = useState([]);
 
-  const localRecommendations = useMemo(
-    () => crops.map((crop) => scoreCrop(crop, farm)).sort((a, b) => b.suitability - a.suitability),
-    [farm]
-  );
-  const recommendations = apiRecommendations || localRecommendations;
+  const profileComplete = [
+    farm.farmerName, farm.location, farm.language, farm.landSize, farm.season, farm.previousCrop,
+    farm.soilType, farm.ph, farm.nitrogen, farm.phosphorus, farm.potassium, farm.temperature,
+    farm.humidity, farm.rainfall, farm.budget, farm.marketPriority
+  ].every((value) => String(value).trim() !== '');
+  const recommendations = apiRecommendations || [];
   const topCrop = recommendations[0];
-
-  const fallbackWeather = useMemo(
-    () => ({
-      source: 'OpenWeatherMap ready',
-      temperature: farm.temperature,
-      humidity: farm.humidity,
-      rainfall: farm.rainfall,
-      alert:
-        Number(farm.rainfall) < 40
-          ? 'Low rainfall alert'
-          : Number(farm.rainfall) > 180
-            ? 'Waterlogging risk'
-            : 'Weather is workable'
-    }),
-    [farm]
-  );
-  const weather = analysis?.weather || fallbackWeather;
+  const weather = analysis?.weather;
   const soilAnalysis = analysis?.soil;
   const marketAnalysis = analysis?.markets?.[0];
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('annapurna-user');
-    if (storedUser) {
-      try { setAuthUser(JSON.parse(storedUser)); } catch { localStorage.removeItem('annapurna-user'); }
+    const storedFinance = localStorage.getItem(FINANCE_STORAGE_KEY);
+    if (storedFinance) {
+      try {
+        const savedFinance = JSON.parse(storedFinance);
+        setActualExpenses(savedFinance.actualExpenses || {});
+        setManualMarketPrice(savedFinance.manualMarketPrice || '');
+      } catch { localStorage.removeItem(FINANCE_STORAGE_KEY); }
     }
     loadHistory();
     loadIntegrationStatus();
+    loadCropCatalog();
     const handleRoute = () => setRoute(window.location.pathname || '/');
     window.addEventListener('popstate', handleRoute);
     return () => window.removeEventListener('popstate', handleRoute);
   }, []);
+
+  useEffect(() => {
+    if (financialPlan) {
+      localStorage.setItem(FINANCE_STORAGE_KEY, JSON.stringify({ crop: financialPlan.crop, actualExpenses, manualMarketPrice }));
+    }
+  }, [financialPlan, actualExpenses, manualMarketPrice]);
 
   function navigate(path) {
     if (window.location.pathname !== path) window.history.pushState({}, '', path);
@@ -374,80 +369,17 @@ function App() {
     setApiRecommendations(null);
     setGeminiExplanation(null);
     setAnalysis(null);
+    setFinancialPlan(null);
+    setManualMarketPrice('');
   }
 
-  async function registerUser() {
+  function loadHistory() {
     try {
-      const response = await fetch(`${API_BASE}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: farm.farmerName,
-          phone: farm.phone,
-          password: authPassword,
-          language: farm.language,
-          location: farm.location
-        })
-      });
-      if (!response.ok && response.status !== 409) throw new Error(`API returned ${response.status}`);
-      if (response.status === 409) {
-        setApiStatus('Account already exists. Use login.');
-        return;
-      }
-      const data = await response.json();
-      setAuthUser(data.user);
-      localStorage.setItem('annapurna-user', JSON.stringify(data.user));
-      setApiStatus('Account registered');
-      navigate('/dashboard');
-    } catch (error) {
-      setAuthUser({ name: farm.farmerName, phone: farm.phone, language: farm.language, location: farm.location });
-      setApiStatus('Demo account active locally');
-      navigate('/dashboard');
-    }
-  }
-
-  async function loginUser() {
-    try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: farm.phone, password: authPassword })
-      });
-      if (!response.ok) throw new Error(`API returned ${response.status}`);
-      const data = await response.json();
-      setAuthUser(data.user);
-      localStorage.setItem('annapurna-user', JSON.stringify(data.user));
-      setFarm((current) => ({
-        ...current,
-        farmerName: data.user.name,
-        phone: data.user.phone,
-        language: data.user.language,
-        location: data.user.location
-      }));
-      setApiStatus('Logged in with backend account');
-      navigate('/dashboard');
-    } catch (error) {
-      setApiStatus('Login failed or backend offline');
-    }
-  }
-
-  async function loadHistory() {
-    try {
-      const response = await fetch(`${API_BASE}/history`);
-      if (!response.ok) throw new Error(`API returned ${response.status}`);
-      const data = await response.json();
-      setHistory(
-        (data.history || []).map((item) => ({
-          id: item.id,
-          crop: item.crop,
-          score: item.suitability,
-          profit: item.expected_profit,
-          location: item.location,
-          date: item.created_at
-        }))
-      );
-    } catch (error) {
-      setApiStatus('Backend offline: using browser-only mode');
+      const savedPlans = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+      setHistory(Array.isArray(savedPlans) ? savedPlans.slice(0, 6) : []);
+    } catch {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+      setHistory([]);
     }
   }
 
@@ -457,66 +389,57 @@ function App() {
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       setIntegrationStatus(await response.json());
     } catch (error) {
-      setIntegrationStatus({
-        soilgrids: 'adapter_ready',
-        isro_bhuvan: 'adapter_ready',
-        openweather: 'offline',
-        agmarknet: 'offline',
-        enam: 'offline',
-        gemini: 'backend_offline',
-        gemini_model: 'gemini-3.6-flash',
-        genai: 'local_advisory_fallback'
-      });
+      setIntegrationStatus(null);
     }
   }
 
-  function exportReport() {
-    const lines = [
-      'Annapurna AI Crop Recommendation Report',
-      '',
-      `Farmer: ${farm.farmerName}`,
-      `Phone: ${farm.phone}`,
-      `Location: ${farm.location}`,
-      `Language: ${farm.language}`,
-      `Season: ${farm.season}`,
-      `Previous crop: ${farm.previousCrop}`,
-      `Soil type: ${farm.soilType}`,
-      `Land size: ${farm.landSize} acre`,
-      `Budget: INR ${Number(farm.budget).toLocaleString('en-IN')}`,
-      '',
-      `Top crop: ${topCrop.name}`,
-      `Suitability: ${topCrop.suitability}%`,
-      `Expected yield: ${topCrop.expectedYield} quintal`,
-      `Expected return: INR ${topCrop.expectedProfit.toLocaleString('en-IN')}`,
-      ...(topCrop.estimatedCost ? [
-        `Estimated cost: INR ${topCrop.estimatedCost.toLocaleString('en-IN')}`,
-        `Estimated revenue: INR ${topCrop.estimatedRevenue.toLocaleString('en-IN')}`,
-        `Profit margin: ${topCrop.profitMargin}%`,
-        `Sustainability score: ${topCrop.sustainabilityScore}/100`
-      ] : []),
-      `Water need: ${topCrop.water}`,
-      '',
-      'Why recommended:',
-      ...topCrop.reasons.map((reason) => `- ${reason}`),
-      '',
-      'Warnings:',
-      ...topCrop.cautions.map((warning) => `- ${warning}`),
-      '',
-      'Advisory:',
-      topCrop.advisory,
-      topCrop.rotation,
-      topCrop.sustainability
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `annapurna-ai-${topCrop.name.toLowerCase().replace(/\s+/g, '-')}-report.txt`;
-    link.click();
-    URL.revokeObjectURL(url);
+  async function loadCropCatalog() {
+    try {
+      const response = await fetch(`${API_BASE}/crops`);
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const data = await response.json();
+      setCropNames((data.crops || []).map((item) => item.crop).filter(Boolean));
+    } catch (error) {
+      setCropNames([]);
+    }
+  }
+
+  async function exportReport() {
+    if (!topCrop) {
+      setApiStatus('Run a backend analysis before exporting a report.');
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/reports/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          farm: toApiFarm(farm),
+          recommendation: topCrop,
+          weather,
+          market: marketAnalysis,
+          finance: financialPlan
+        })
+      });
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `annapurna-${topCrop.name.toLowerCase().replace(/\s+/g, '-')}-farm-report.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setApiStatus('Designed PDF report downloaded.');
+    } catch (error) {
+      setApiStatus('PDF report could not be generated. Check the backend connection.');
+    }
   }
 
   async function savePlan() {
+    if (!topCrop) {
+      setApiStatus('Run a backend analysis before saving a plan.');
+      return;
+    }
     const localRecord = {
       id: crypto.randomUUID(),
       crop: topCrop.name,
@@ -526,29 +449,33 @@ function App() {
       date: new Date().toLocaleString('en-IN')
     };
 
-    setHistory((items) => [localRecord, ...items.slice(0, 5)]);
+    setHistory((items) => {
+      const nextHistory = [localRecord, ...items].slice(0, 6);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+      return nextHistory;
+    });
+    setApiStatus('Plan saved on this device');
+  }
 
-    try {
-      const response = await fetch(`${API_BASE}/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          farmer_name: farm.farmerName,
-          location: farm.location,
-          crop: topCrop.name,
-          suitability: topCrop.suitability,
-          expected_profit: topCrop.expectedProfit
-        })
-      });
-      if (!response.ok) throw new Error(`API returned ${response.status}`);
-      setApiStatus('Saved to backend history');
-      await loadHistory();
-    } catch (error) {
-      setApiStatus('Saved locally only: backend offline');
-    }
+  function clearSavedPlans() {
+    localStorage.removeItem(HISTORY_STORAGE_KEY);
+    setHistory([]);
+    setApiStatus('Saved plans cleared from this device');
+  }
+
+  function clearFinanceTracker() {
+    localStorage.removeItem(FINANCE_STORAGE_KEY);
+    setActualExpenses({});
+    setManualMarketPrice('');
+    setFinancialPlan(null);
+    setApiStatus('Finance tracker cleared from this device');
   }
 
   async function syncBackend() {
+    if (!profileComplete) {
+      setApiStatus('Complete every farm profile field before analysis.');
+      return;
+    }
     setAnalysisLoading(true);
     try {
       const response = await fetch(`${API_BASE}/analysis`, {
@@ -563,7 +490,7 @@ function App() {
       setAnalysis(data);
       setGeminiExplanation(data.ai_explanation || null);
       const top = normalized[0];
-      setApiStatus(top ? `${data.ai_provider === 'gemini' ? 'Gemini explanation ready' : 'Local ranking ready'}: ${top.name} ${top.suitability}%` : 'Backend online');
+      setApiStatus(top ? `${data.ai_provider === 'gemini' ? 'Gemini explanation ready' : 'Analysis ready'}: ${top.name} ${top.suitability}%` : 'No verified recommendation returned');
     } catch (error) {
       setGeminiExplanation(null);
       setApiStatus('Backend offline: run FastAPI on port 8000');
@@ -572,10 +499,77 @@ function App() {
     }
   }
 
+  async function runFinancialPlan() {
+    if (!topCrop || !profileComplete) {
+      setApiStatus('Complete the profile and run crop analysis before creating a finance plan.');
+      return;
+    }
+    setFinanceLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/finance/season-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          farm: toApiFarm(farm),
+          crop: topCrop.name,
+          actual_expenses: Object.fromEntries(Object.entries(actualExpenses).map(([key, value]) => [key, Number(value) || 0])),
+          market_price_per_quintal: manualMarketPrice.trim() ? Number(manualMarketPrice) : undefined
+        })
+      });
+      if (!response.ok) throw new Error(`API returned ${response.status}`);
+      const data = await response.json();
+      setFinancialPlan(data);
+      setActualExpenses(Object.fromEntries(data.expenses.map((item) => [item.category, item.actual])));
+      setApiStatus(`Season profit plan ready for ${data.crop}`);
+    } catch (error) {
+      setApiStatus('Financial planner needs the backend running on port 8000');
+    } finally {
+      setFinanceLoading(false);
+    }
+  }
+
+  function exportFinancialPlan() {
+    if (!financialPlan) return;
+    const { summary } = financialPlan;
+    const lines = [
+      'Annapurna AI Season Finance Plan',
+      '',
+      `Farm: ${farm.farmerName}`,
+      `Location: ${farm.location}`,
+      `Season: ${farm.season}`,
+      `Crop: ${financialPlan.crop}`,
+      '',
+      `Planned cultivation cost: INR ${summary.planned_cost.toLocaleString('en-IN')}`,
+      `Current tracked cost: INR ${summary.actual_cost.toLocaleString('en-IN')}`,
+      `Expected revenue: INR ${summary.expected_revenue.toLocaleString('en-IN')}`,
+      `Expected profit: INR ${summary.expected_profit.toLocaleString('en-IN')}`,
+      `Profit margin: ${summary.profit_margin}%`,
+      `Break-even price: INR ${summary.break_even_price_per_quintal}/quintal`,
+      `Working-capital gap: INR ${summary.working_capital_gap.toLocaleString('en-IN')}`,
+      '',
+      'Expense tracker:',
+      ...financialPlan.expenses.map((item) => `- ${item.category}: planned INR ${item.planned.toLocaleString('en-IN')}; tracked INR ${item.actual.toLocaleString('en-IN')}`),
+      '',
+      'Risk scenarios:',
+      ...financialPlan.scenarios.map((item) => `- ${item.name}: revenue INR ${item.revenue.toLocaleString('en-IN')}; profit INR ${item.profit.toLocaleString('en-IN')}`),
+      '',
+      'Important: This document is a planning estimate, not a lending, investment, or guaranteed-income recommendation.'
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `annapurna-${financialPlan.crop.toLowerCase().replace(/\s+/g, '-')}-season-finance.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function askBot() {
-    const userQuestion = question;
+    const userQuestion = question.trim();
+    if (!userQuestion || !topCrop || !profileComplete || advisorLoading) return;
     setChat((items) => [...items, { by: farm.farmerName, text: userQuestion }]);
     setQuestion('');
+    setAdvisorLoading(true);
 
     try {
       const response = await fetch(`${API_BASE}/chat`, {
@@ -584,17 +578,27 @@ function App() {
         body: JSON.stringify({
           question: userQuestion,
           crop: topCrop.name,
-          farm: toApiFarm(farm)
+          farm: toApiFarm(farm),
+          finance: financialPlan ? {
+            crop: financialPlan.crop,
+            planning_source: financialPlan.planning_source,
+            actual_cost: financialPlan.summary.actual_cost,
+            expected_revenue: financialPlan.summary.expected_revenue,
+            expected_profit: financialPlan.summary.expected_profit,
+            break_even_price_per_quintal: financialPlan.summary.break_even_price_per_quintal,
+            working_capital_gap: financialPlan.summary.working_capital_gap
+          } : null
         })
       });
       if (!response.ok) throw new Error(`API returned ${response.status}`);
       const data = await response.json();
       setChat((items) => [...items, { by: 'Annapurna AI', text: data.answer }]);
-      setApiStatus(data.provider === 'gemini' ? 'Gemini advisor online' : 'Local advisor fallback used');
+      setApiStatus(data.provider === 'gemini' ? 'Gemini advisor online' : 'Advisor response unavailable');
     } catch (error) {
-      const answer = `${topCrop.name} is currently the strongest match. ${topCrop.advisory} ${topCrop.rotation} Expected return is INR ${topCrop.expectedProfit.toLocaleString('en-IN')} for ${farm.landSize} acre.`;
-      setChat((items) => [...items, { by: 'Annapurna AI', text: answer }]);
-      setApiStatus('Chatbot fallback used');
+      setChat((items) => [...items, { by: 'Annapurna AI', text: 'Advisor is unavailable right now. Please retry after the backend connection is restored.' }]);
+      setApiStatus('Advisor request failed; no local answer was generated.');
+    } finally {
+      setAdvisorLoading(false);
     }
   }
 
@@ -617,8 +621,8 @@ function App() {
       setDiseaseAdvisory(`${data.prediction}${confidence}: ${data.advisory}`);
       setApiStatus(data.provider === 'gemini' ? 'Gemini visual analysis complete' : 'Disease fallback used');
     } catch (error) {
-      setDiseaseAdvisory(diseaseResults[topCrop.name]);
-      setApiStatus('Disease fallback used');
+      setDiseaseAdvisory('Image analysis is unavailable. No diagnosis was generated. Please retry or consult a qualified agriculture expert.');
+      setApiStatus('Disease analysis request failed; no local diagnosis was generated.');
     }
   }
 
@@ -627,24 +631,14 @@ function App() {
   }
 
   if (route === '/register' || route === '/login') {
-    return (
-      <AuthScreen
-        mode={route === '/register' ? 'register' : 'login'}
-        farm={farm}
-        password={authPassword}
-        update={update}
-        setPassword={setAuthPassword}
-        onSubmit={route === '/register' ? registerUser : loginUser}
-        navigate={navigate}
-        status={apiStatus}
-      />
-    );
+    return <GuestEntry navigate={navigate} />;
   }
 
   const navItems = [
     ['/dashboard', 'Overview', Home],
     ['/planner', 'Crop planner', Sprout],
     ['/insights', 'Insights', BarChart3],
+    ['/finance', 'Season finance', Wallet],
     ['/disease', 'Disease scan', Camera],
     ['/advisor', 'AI advisor', Bot],
     ['/records', 'Saved plans', History],
@@ -655,6 +649,7 @@ function App() {
     '/dashboard': ['Farm overview', 'Your current season, recommendation, and field signals at a glance.'],
     '/planner': ['Crop planner', 'Enter farm conditions and compare the strongest crop matches.'],
     '/insights': ['Field insights', 'Understand the agronomy, economics, weather, and sustainability behind the recommendation.'],
+    '/finance': ['Season finance', 'Plan costs, working capital, break-even price, and profitability scenarios.'],
     '/disease': ['Disease analysis', 'Upload a crop image and receive an initial advisory.'],
     '/advisor': ['AI farm advisor', 'Ask questions using your current crop and field conditions.'],
     '/records': ['Saved plans', 'Review recommendation plans saved for this farmer.'],
@@ -663,17 +658,32 @@ function App() {
   const currentMeta = pageMeta[route] || pageMeta['/dashboard'];
 
   function renderPage() {
+    if (!profileComplete && route !== '/planner') return (
+      <section className="page-section empty-records">
+        <Sprout size={30} />
+        <h3>Complete your farm profile first</h3>
+        <p>No crop, weather, finance, or advisor data is generated until you enter your own field details.</p>
+        <button className="primary-action" onClick={() => navigate('/planner')}>Complete farm profile</button>
+      </section>
+    );
+    if (profileComplete && !topCrop && route !== '/planner') return (
+      <section className="page-section empty-records">
+        <Database size={30} />
+        <h3>Run your farm analysis</h3>
+        <p>Your profile is ready. Generate a backend analysis to view recommendations and ask the advisor.</p>
+        <button className="primary-action" onClick={() => navigate('/planner')}>Open crop planner</button>
+      </section>
+    );
     if (route === '/planner') return (
       <section className="main-grid page-section">
         <Panel title="Farm conditions" eyebrow="Step 01 / Enter data" icon={Search}>
           <div className="form-grid">
             <Field label="Farmer name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />
-            <Field label="Phone" value={farm.phone} onChange={(value) => update('phone', value)} />
             <Field label="Location" value={farm.location} onChange={(value) => update('location', value)} />
-            <SelectField label="Language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />
-            <SelectField label="Season" value={farm.season} values={['Kharif', 'Rabi', 'Zaid']} onChange={(value) => update('season', value)} />
-            <SelectField label="Previous crop" value={farm.previousCrop} values={['None', ...crops.map((crop) => crop.name)]} onChange={(value) => update('previousCrop', value)} />
-            <SelectField label="Soil type" value={farm.soilType} values={['Alluvial', 'Black', 'Clayey', 'Loamy', 'Sandy loam']} onChange={(value) => update('soilType', value)} />
+            <SelectField label="Language" value={farm.language} values={['', 'English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />
+            <SelectField label="Season" value={farm.season} values={['', 'Kharif', 'Rabi', 'Annual']} onChange={(value) => update('season', value)} />
+            <SelectField label="Previous crop" value={farm.previousCrop} values={['', 'None', ...cropNames]} onChange={(value) => update('previousCrop', value)} />
+            <SelectField label="Soil type" value={farm.soilType} values={['', 'Alluvial', 'Black', 'Clayey', 'Loamy', 'Sandy loam']} onChange={(value) => update('soilType', value)} />
             <RangeInput label="Land size (acre)" field="landSize" min="0.5" max="10" step="0.5" value={farm.landSize} update={update} />
             <RangeInput label="Soil pH" field="ph" min="4" max="9" step="0.1" value={farm.ph} update={update} />
             <RangeInput label="Nitrogen" field="nitrogen" min="0" max="100" value={farm.nitrogen} update={update} />
@@ -683,13 +693,13 @@ function App() {
             <RangeInput label="Humidity (%)" field="humidity" min="10" max="100" value={farm.humidity} update={update} />
             <RangeInput label="Rainfall (mm)" field="rainfall" min="0" max="300" value={farm.rainfall} update={update} />
             <RangeInput label="Budget (INR)" field="budget" min="5000" max="150000" step="1000" value={farm.budget} update={update} />
-            <SelectField label="Priority" value={farm.marketPriority} values={['Balanced', 'Profit', 'Sustainability', 'Water saving']} onChange={(value) => update('marketPriority', value)} />
+            <SelectField label="Priority" value={farm.marketPriority} values={['', 'Balanced', 'Profit', 'Sustainability', 'Water saving']} onChange={(value) => update('marketPriority', value)} />
           </div>
         </Panel>
         <Panel title="Best crop matches" eyebrow="Step 02 / Compare" icon={BarChart3}>
           <div className="crop-list">{recommendations.slice(0, 4).map((crop) => <CropCard crop={crop} key={crop.name} />)}</div>
           {geminiExplanation && <div className="gemini-insight"><div><Bot size={18} /><strong>Gemini explanation</strong></div><p>{geminiExplanation.summary}</p><span><b>Next:</b> {geminiExplanation.priority_action}</span><span><b>Watch:</b> {geminiExplanation.risk_note}</span></div>}
-          <div className="planner-actions"><button className="secondary-action" onClick={syncBackend} disabled={analysisLoading}><Bot size={18} /> {analysisLoading ? 'Analysing farm…' : 'Run complete analysis'}</button><button className="primary-action" onClick={savePlan}><Save size={18} /> Save this plan</button></div>
+          <div className="planner-actions"><button className="secondary-action" onClick={syncBackend} disabled={analysisLoading || !profileComplete}><Bot size={18} /> {analysisLoading ? 'Analysing farm…' : 'Run complete analysis'}</button><button className="primary-action" onClick={savePlan} disabled={!topCrop}><Save size={18} /> Save this plan</button></div>
         </Panel>
       </section>
     );
@@ -720,6 +730,58 @@ function App() {
       </section>
     );
 
+    if (route === '/finance') return (
+      <section className="finance-grid page-section">
+        <Panel title="Season profit planner" eyebrow="Plan, track, compare" icon={Wallet}>
+          <p className="panel-copy">Turn the {topCrop.name} recommendation into a practical season budget. These are planning estimates, not a loan, credit, or investment recommendation.</p>
+          <label className="market-price-input"><span>Verified local mandi price (optional, INR/quintal)</span><input type="number" min="1" max="1000000" value={manualMarketPrice} onChange={(event) => setManualMarketPrice(event.target.value)} placeholder={`Baseline: INR ${topCrop.marketPrice}/q`} /><small>Use only a price you have checked for the correct crop, unit, mandi, and date.</small></label>
+          <div className="planner-actions"><button className="primary-action" onClick={runFinancialPlan} disabled={financeLoading}><Wallet size={18} /> {financeLoading ? 'Calculating…' : financialPlan ? 'Recalculate plan' : 'Create season plan'}</button><button className="secondary-action" onClick={() => navigate('/planner')}><Sprout size={18} /> Update crop inputs</button></div>
+        </Panel>
+        <Panel title="Finance guardrail" eyebrow="Farmer-first planning" icon={ShieldCheck}>
+          <StatusLine text="No bank account, loan, credit-score, or payment data is requested" />
+          <StatusLine text="Replace planning costs with actual farm expenses" />
+          <StatusLine text="Verify selling prices with your selected mandi before acting" />
+        </Panel>
+        {financialPlan && <>
+          <Panel title={`${financialPlan.crop} financial summary`} eyebrow={financialPlan.planning_source} icon={IndianRupee}>
+            <div className="kpi-row"><Metric icon={Wallet} label="Working capital" value={`INR ${financialPlan.summary.actual_cost.toLocaleString('en-IN')}`} /><Metric icon={IndianRupee} label="Expected profit" value={`INR ${financialPlan.summary.expected_profit.toLocaleString('en-IN')}`} /></div>
+            <div className="insight-facts"><span><b>Revenue</b> INR {financialPlan.summary.expected_revenue.toLocaleString('en-IN')}</span><span><b>Break-even</b> INR {financialPlan.summary.break_even_price_per_quintal}/q</span><span><b>Margin</b> {financialPlan.summary.profit_margin}%</span></div>
+            <p className={financialPlan.summary.working_capital_gap ? 'alert-line' : 'panel-copy'}>{financialPlan.summary.working_capital_gap ? `Planned cost exceeds the selected budget by INR ${financialPlan.summary.working_capital_gap.toLocaleString('en-IN')}.` : `Budget remaining after planned cost: INR ${financialPlan.summary.budget_remaining.toLocaleString('en-IN')}.`}</p>
+          </Panel>
+          <Panel title="Season outlook" eyebrow="Revenue, cost and estimated profit" icon={BarChart3}>
+            <FinanceBarChart
+              description="Expected revenue compared with the current working-capital cost and estimated profit."
+              items={[
+                { label: 'Revenue', value: financialPlan.summary.expected_revenue, tone: 'revenue' },
+                { label: 'Cost', value: financialPlan.summary.actual_cost, tone: 'cost' },
+                { label: 'Profit', value: financialPlan.summary.expected_profit, tone: 'profit' }
+              ]}
+            />
+          </Panel>
+          <Panel title="Risk comparison" eyebrow="Profit under changing conditions" icon={Activity}>
+            <FinanceBarChart
+              description="Compare estimated profit before committing money to the season."
+              items={financialPlan.scenarios.map((scenario) => ({ label: scenario.name, value: scenario.profit, tone: scenario.name === 'Combined risk' ? 'risk' : 'profit' }))}
+            />
+          </Panel>
+          <Panel title="Cost tracker" eyebrow="Planned vs actual" icon={LineChart}>
+            <div className="expense-list">{financialPlan.expenses.map((expense) => <label className="expense-row" key={expense.category}><span><b>{expense.category}</b><small>Plan: INR {expense.planned.toLocaleString('en-IN')}</small></span><input type="number" min="0" value={actualExpenses[expense.category] ?? expense.actual} onChange={(event) => setActualExpenses((current) => ({ ...current, [expense.category]: event.target.value }))} /><em className={expense.variance > 0 ? 'over' : ''}>{expense.variance > 0 ? '+' : ''}{expense.variance.toLocaleString('en-IN')}</em></label>)}</div>
+            <div className="finance-actions"><button className="secondary-action" onClick={runFinancialPlan} disabled={financeLoading}>Refresh actual-cost plan</button><button className="secondary-action" onClick={exportReport}><Download size={17} /> Download PDF report</button></div>
+          </Panel>
+          <Panel title="Risk scenarios" eyebrow="Do not plan only for the best case" icon={Activity}>
+            <div className="scenario-list">{financialPlan.scenarios.map((scenario) => <div className={scenario.name === 'Combined risk' ? 'scenario-row risk' : 'scenario-row'} key={scenario.name}><strong>{scenario.name}</strong><span>Revenue INR {scenario.revenue.toLocaleString('en-IN')}</span><b>Profit INR {scenario.profit.toLocaleString('en-IN')}</b></div>)}</div>
+          </Panel>
+          <Panel title="Cash-flow timeline" eyebrow="When money moves" icon={CalendarDays} className="finance-chart-panel">
+            <FinanceBarChart
+              description="Bars below the line are planned spending; bars above it are expected inflows."
+              items={financialPlan.cash_flow.map((stage) => ({ label: stage.stage, value: stage.cash_in - stage.cash_out, tone: stage.cash_in ? 'revenue' : 'cost' }))}
+            />
+            <div className="cashflow-list">{financialPlan.cash_flow.map((stage) => <div className="cashflow-row" key={stage.stage}><strong>{stage.stage}</strong><span>{stage.cash_out ? `Spend INR ${stage.cash_out.toLocaleString('en-IN')}` : `Expected inflow INR ${stage.cash_in.toLocaleString('en-IN')}`}</span></div>)}</div>
+          </Panel>
+        </>}
+      </section>
+    );
+
     if (route === '/disease') return (
       <section className="feature-layout page-section">
         <Panel title="Upload crop image" eyebrow="Gemini multimodal screening" icon={Camera}>
@@ -739,13 +801,14 @@ function App() {
       <section className="advisor-layout page-section">
         <Panel title="Conversation" eyebrow={`Gemini advisor / ${farm.language}`} icon={MessageSquareText}>
           <div className="chat-window expanded-chat">{chat.map((item, index) => <div className={item.by === 'Annapurna AI' ? 'chat-bubble ai' : 'chat-bubble'} key={`${item.by}-${index}`}><strong>{item.by}</strong><span>{item.text}</span></div>)}</div>
-          <div className="chat-input"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && question.trim() && askBot()} placeholder="Ask about irrigation, fertilizer, disease, or market planning" /><button onClick={askBot} disabled={!question.trim()}><Bot size={18} /> Ask advisor</button></div>
+          <div className="chat-input"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); askBot(); } }} placeholder="Ask about irrigation, fertilizer, disease, or market planning" disabled={advisorLoading} /><button onClick={askBot} disabled={!question.trim() || advisorLoading}>{advisorLoading ? 'Thinking…' : <><Bot size={18} /> Ask advisor</>}</button></div>
         </Panel>
         <Panel title="Advisor context" eyebrow="Live farm profile" icon={Database}>
           <StatusLine text={`Top crop: ${topCrop.name} (${topCrop.suitability}%)`} />
           <StatusLine text={`Soil: ${farm.soilType}, pH ${farm.ph}`} />
           <StatusLine text={`Season: ${farm.season}`} />
           <StatusLine text={`Priority: ${farm.marketPriority}`} />
+          <StatusLine text={financialPlan ? `Finance context linked: ${financialPlan.crop} plan` : 'Finance context: create a season plan to link it'} />
         </Panel>
       </section>
     );
@@ -753,7 +816,7 @@ function App() {
     if (route === '/records') return (
       <section className="page-section records-page">
         <Panel title="Recommendation history" eyebrow="Saved plans" icon={History}>
-          {history.length === 0 ? <div className="empty-records"><History size={30} /><h3>No saved plans yet</h3><p>Complete the crop planner and save a recommendation to build your farm record.</p><button className="primary-action" onClick={() => navigate('/planner')}>Open crop planner</button></div> : <div className="history-list records-list">{history.map((item) => <div className="history-item" key={item.id}><div><strong>{item.crop}</strong><span>{item.location} · {item.date}</span></div><p>{item.score}% match</p></div>)}</div>}
+          {history.length === 0 ? <div className="empty-records"><History size={30} /><h3>No saved plans yet</h3><p>Complete the crop planner and save a recommendation to build your farm record.</p><button className="primary-action" onClick={() => navigate('/planner')}>Open crop planner</button></div> : <><div className="history-list records-list">{history.map((item) => <div className="history-item" key={item.id}><div><strong>{item.crop}</strong><span>{item.location} · {item.date}</span></div><p>{item.score}% match</p></div>)}</div><button className="secondary-action clear-local-data" onClick={clearSavedPlans}>Clear saved plans from this device</button></>}
         </Panel>
       </section>
     );
@@ -763,8 +826,8 @@ function App() {
         <Panel title="Data sources" eyebrow="Integration status" icon={Database}>
           <StatusLine text={apiStatus} /><StatusLine text={`Gemini AI: ${integrationStatus?.gemini || 'checking'} (${integrationStatus?.gemini_model || 'model pending'})`} /><StatusLine text={`SoilGrids: ${integrationStatus?.soilgrids || 'checking'}`} /><StatusLine text={`ISRO Bhuvan: ${integrationStatus?.isro_bhuvan || 'checking'}`} /><StatusLine text={`OpenWeatherMap: ${integrationStatus?.openweather || 'checking'}`} /><StatusLine text={`Market feeds: ${integrationStatus ? `${integrationStatus.agmarknet}/${integrationStatus.enam}` : 'checking'}`} />
         </Panel>
-        <Panel title="Operations" eyebrow="Account & data" icon={Settings}>
-          <div className="admin-actions"><button className="secondary-action" onClick={syncBackend}><Database size={18} /> Sync recommendations</button><button className="secondary-action" onClick={loadIntegrationStatus}><Activity size={18} /> Refresh integrations</button><button className="secondary-action" onClick={exportReport}><Download size={18} /> Export current report</button></div>
+        <Panel title="Operations" eyebrow="This device" icon={Settings}>
+          <div className="admin-actions"><button className="secondary-action" onClick={syncBackend}><Database size={18} /> Sync recommendations</button><button className="secondary-action" onClick={loadIntegrationStatus}><Activity size={18} /> Refresh integrations</button><button className="secondary-action" onClick={exportReport}><Download size={18} /> Export current report</button><button className="secondary-action clear-local-data" onClick={clearFinanceTracker}>Clear finance tracker from this device</button></div>
         </Panel>
         <Panel title="Safety & ethics" eyebrow="Advisory safeguards" icon={ShieldCheck}>
           <StatusLine text="Farmer consent for profile and image data" /><StatusLine text="Recommendations are advisory, not guaranteed outcomes" /><StatusLine text="API keys remain in the backend environment" /><StatusLine text="Local verification recommended before treatment" />
@@ -798,10 +861,10 @@ function App() {
         <nav className="nav-list" aria-label="Application navigation">
           {navItems.map(([path, label, Icon]) => <button className={`nav-item ${route === path ? 'active' : ''}`} onClick={() => navigate(path)} key={path}><Icon size={18} /><span>{label}</span></button>)}
         </nav>
-        <div className="sidebar-profile"><div className="avatar">{(authUser?.name || farm.farmerName).charAt(0)}</div><div><strong>{authUser?.name || farm.farmerName}</strong><span>{farm.location}</span></div><button aria-label="Sign out" onClick={() => { setAuthUser(null); localStorage.removeItem('annapurna-user'); navigate('/login'); }}><LogOut size={17} /></button></div>
+        <div className="sidebar-profile"><div className="avatar">{farm.farmerName.charAt(0)}</div><div><strong>{farm.farmerName}</strong><span>{farm.location}</span></div></div>
       </aside>
       <section className="workspace saas-workspace">
-        <header className="app-topbar"><div><p className="eyebrow">Annapurna workspace</p><h2>{currentMeta[0]}</h2><p>{currentMeta[1]}</p></div><div className="topbar-actions"><span className="live-pill"><i /> Advisory online</span><button className="secondary-action" onClick={exportReport}><Download size={17} /> Report</button></div></header>
+        <header className="app-topbar"><div><p className="eyebrow">Annapurna workspace</p><h2>{currentMeta[0]}</h2><p>{currentMeta[1]}</p></div><div className="topbar-actions"><span className="live-pill"><i /> Advisory online</span><button className="secondary-action" onClick={exportReport} disabled={!topCrop}><Download size={17} /> Report</button></div></header>
         <div className="page-content">{renderPage()}</div>
       </section>
     </main>
@@ -828,8 +891,7 @@ function PublicHeader({ page, navigate }) {
       <nav aria-label="Public navigation">
         <button className={page === 'home' ? 'active' : ''} onClick={() => navigate('/')}>Home</button>
         <button className={page === 'about' ? 'active' : ''} onClick={() => navigate('/about')}>About</button>
-        <button onClick={() => navigate('/login')}>Sign in</button>
-        <button className="public-cta" onClick={() => navigate('/register')}>Create account <span>→</span></button>
+        <button className="public-cta" onClick={() => navigate('/dashboard')}>Open workspace <span>→</span></button>
       </nav>
     </header>
   );
@@ -844,23 +906,23 @@ function LandingPage({ navigate }) {
           <h1>Plan every season with a clearer view of your farm.</h1>
           <p>Annapurna AI combines deterministic crop ranking with Gemini-powered explanations, multimodal disease screening, and multilingual guidance—so every recommendation is easier to understand and act on.</p>
           <div className="landing-actions">
-            <button className="marketing-primary" onClick={() => navigate('/register')}>Start your farm plan <span>→</span></button>
+            <button className="marketing-primary" onClick={() => navigate('/dashboard')}>Start your farm plan <span>→</span></button>
             <button className="marketing-secondary" onClick={() => navigate('/about')}>See how it works</button>
           </div>
           <div className="landing-trust">
             <span><CheckCircle2 size={16} /> Explainable recommendations</span>
-            <span><CheckCircle2 size={16} /> Works in demo mode</span>
+            <span><CheckCircle2 size={16} /> Profile-led analysis</span>
             <span><CheckCircle2 size={16} /> Farmer-first safeguards</span>
           </div>
         </div>
-        <div className="product-preview" aria-label="Annapurna crop recommendation preview">
-          <div className="preview-top"><span><i /> Live field plan</span><small>Kharif · Sonipat</small></div>
+        <div className="product-preview" aria-label="Annapurna profile-led analysis preview">
+          <div className="preview-top"><span><i /> Profile-led workspace</span><small>Data required</small></div>
           <div className="preview-body">
-            <div className="preview-heading"><div><small>Best crop match</small><h3>Maize</h3></div><strong>91%</strong></div>
-            <div className="preview-progress"><span /></div>
-            <div className="preview-metrics"><div><small>Expected return</small><strong>₹72,000</strong></div><div><small>Water need</small><strong>Medium</strong></div><div><small>Soil match</small><strong>Strong</strong></div></div>
-            <div className="preview-advice"><Leaf size={18} /><div><strong>Why this works</strong><p>Alluvial soil, rainfall, temperature, and budget are aligned with the current crop profile.</p></div></div>
-            <div className="preview-chart" aria-hidden="true">{[46, 62, 54, 78, 68, 88, 74, 92].map((height, index) => <span style={{ height: `${height}%` }} key={index} />)}</div>
+            <div className="preview-heading"><div><small>Farm profile</small><h3>Awaiting your data</h3></div><strong>—</strong></div>
+            <div className="preview-progress"><span style={{ width: '22%' }} /></div>
+            <div className="preview-metrics"><div><small>Market price</small><strong>Live source</strong></div><div><small>Weather</small><strong>Live source</strong></div><div><small>Finance</small><strong>Your records</strong></div></div>
+            <div className="preview-advice"><Leaf size={18} /><div><strong>How it works</strong><p>Enter your field details, then generate a profile-specific analysis from backend services.</p></div></div>
+            <div className="preview-chart" aria-hidden="true">{[24, 38, 32, 46, 41, 58, 52, 66].map((height, index) => <span style={{ height: `${height}%` }} key={index} />)}</div>
           </div>
         </div>
       </section>
@@ -921,9 +983,9 @@ function AboutPage({ navigate }) {
         <div className="section-intro"><p className="marketing-kicker">How it is built</p><h2>A working full-stack agricultural prototype.</h2><p>The repository includes the user-facing application, API services, local persistence, recommendation logic, and a path toward trained machine-learning and live integrations.</p></div>
         <div className="architecture-grid">
           <div><span>Interface</span><h3>React + Vite</h3><p>Responsive multipage workflow for registration, planning, insights, disease analysis, advisory, and saved records.</p></div>
-          <div><span>Application API</span><h3>FastAPI</h3><p>Routes for authentication, recommendations, weather, market data, chat, disease analysis, reports, and history.</p></div>
+          <div><span>Application API</span><h3>FastAPI</h3><p>Routes for recommendations, finance planning, weather, market data, chat, disease analysis, and reports.</p></div>
           <div><span>Recommendation</span><h3>Rules + scikit-learn</h3><p>A transparent local scoring fallback plus a trainable model pipeline using regional crop data.</p></div>
-          <div><span>Storage</span><h3>SQLite</h3><p>Prototype persistence for farmer accounts and saved recommendation history.</p></div>
+          <div><span>Storage</span><h3>Browser storage</h3><p>Saved plans and finance expense tracking remain on the current device without an account.</p></div>
         </div>
       </section>
 
@@ -942,49 +1004,15 @@ function MarketingCard({ icon: Icon, label, title, text }) {
 }
 
 function MarketingCTA({ navigate }) {
-  return <section className="marketing-cta"><div><p className="marketing-kicker">Ready to explore?</p><h2>Build your first farm plan in minutes.</h2><p>Create a profile, add the conditions you know, and review a complete recommendation.</p></div><button className="marketing-primary light" onClick={() => navigate('/register')}>Create your account <span>→</span></button></section>;
+  return <section className="marketing-cta"><div><p className="marketing-kicker">Ready to explore?</p><h2>Build your first farm plan in minutes.</h2><p>Add the conditions you know and review a complete recommendation. Your saved plans stay on this device.</p></div><button className="marketing-primary light" onClick={() => navigate('/dashboard')}>Open workspace <span>→</span></button></section>;
 }
 
 function PublicFooter({ navigate }) {
-  return <footer className="public-footer"><button className="public-brand" onClick={() => navigate('/')}><span className="public-brand-mark"><Wheat size={20} /></span><span><strong>Annapurna AI</strong><small>Farm intelligence</small></span></button><p>Decision support for sustainable and informed agriculture.</p><div><button onClick={() => navigate('/')}>Home</button><button onClick={() => navigate('/about')}>About</button><button onClick={() => navigate('/login')}>Sign in</button></div></footer>;
+  return <footer className="public-footer"><button className="public-brand" onClick={() => navigate('/')}><span className="public-brand-mark"><Wheat size={20} /></span><span><strong>Annapurna AI</strong><small>Farm intelligence</small></span></button><p>Decision support for sustainable and informed agriculture.</p><div><button onClick={() => navigate('/')}>Home</button><button onClick={() => navigate('/about')}>About</button><button onClick={() => navigate('/dashboard')}>Open workspace</button></div></footer>;
 }
 
-function AuthScreen({ mode, farm, password, update, setPassword, onSubmit, navigate, status }) {
-  const isRegister = mode === 'register';
-  return (
-    <main className="auth-shell">
-      <section className="auth-story">
-        <button className="auth-brand" onClick={() => navigate('/')}>
-          <span className="brand-mark"><Wheat size={23} /></span>
-          <span><small>ANNAPURNA AI</small><strong>Farm intelligence</strong></span>
-        </button>
-        <div className="auth-story-copy">
-          <p className="eyebrow">Built for better farm decisions</p>
-          <h1>Technology that respects the land and the people who cultivate it.</h1>
-          <p>Bring crop planning, field signals, disease support, and practical advisory into one clear workspace.</p>
-        </div>
-        <div className="auth-trust"><ShieldCheck size={19} /><span>Your recommendations remain advisory and transparent.</span></div>
-      </section>
-      <section className="auth-form-side">
-        <form className="auth-card" onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
-          <p className="eyebrow">{isRegister ? 'Create your workspace' : 'Welcome back'}</p>
-          <h2>{isRegister ? 'Register your farm' : 'Sign in to Annapurna'}</h2>
-          <p className="auth-intro">{isRegister ? 'Set up your farmer profile to receive recommendations relevant to your farm.' : 'Continue to your crop plans, field insights, and saved recommendations.'}</p>
-          <div className="auth-fields">
-            {isRegister && <Field label="Full name" value={farm.farmerName} onChange={(value) => update('farmerName', value)} />}
-            <Field label="Phone number" value={farm.phone} onChange={(value) => update('phone', value)} />
-            {isRegister && <Field label="Farm location" value={farm.location} onChange={(value) => update('location', value)} />}
-            {isRegister && <SelectField label="Preferred language" value={farm.language} values={['English', 'Hindi', 'Punjabi', 'Haryanvi']} onChange={(value) => update('language', value)} />}
-            <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} minLength="6" required /></label>
-          </div>
-          {isRegister && <label className="consent-row"><input type="checkbox" required /><span>I consent to using my farm details to generate advisory recommendations.</span></label>}
-          <button className="primary-action auth-submit" type="submit"><UserRound size={18} /> {isRegister ? 'Create farm account' : 'Sign in'}</button>
-          <p className="auth-switch">{isRegister ? 'Already have an account?' : 'New to Annapurna?'} <button type="button" onClick={() => navigate(isRegister ? '/login' : '/register')}>{isRegister ? 'Sign in' : 'Create an account'}</button></p>
-          <p className="auth-status">{status}</p>
-        </form>
-      </section>
-    </main>
-  );
+function GuestEntry({ navigate }) {
+  return <main className="auth-shell"><section className="auth-story"><div className="auth-brand"><span className="brand-mark"><Wheat size={23} /></span><span><small>ANNAPURNA AI</small><strong>Farm intelligence</strong></span></div><div className="auth-story-copy"><p className="eyebrow">No account required</p><h1>Your farm-planning workspace is ready.</h1><p>Use the tool directly. Saved plans and expense tracking remain in this browser on this device.</p></div><div className="auth-trust"><ShieldCheck size={19} /><span>Recommendations remain advisory and transparent.</span></div></section><section className="auth-form-side"><div className="auth-card"><p className="eyebrow">Guest workspace</p><h2>Start with your farm conditions.</h2><p className="auth-intro">Add your field details, compare crop plans, and use the season finance tracker without registration.</p><button className="primary-action auth-submit" onClick={() => navigate('/dashboard')}><Sprout size={18} /> Open farm workspace</button></div></section></main>;
 }
 
 function QuickAction({ icon: Icon, title, text, onClick }) {
@@ -1053,9 +1081,52 @@ function FieldMap({ crop, moisture }) {
   );
 }
 
-function Panel({ title, eyebrow, icon: Icon, id, children }) {
+function formatCompactRupees(value) {
+  const absolute = Math.abs(value);
+  if (absolute >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
+  if (absolute >= 1000) return `₹${Math.round(value / 1000)}k`;
+  return `₹${Math.round(value)}`;
+}
+
+function FinanceBarChart({ items, description }) {
+  const chartItems = items.filter((item) => Number.isFinite(Number(item.value)));
+  const values = chartItems.map((item) => Number(item.value));
+  const maxValue = Math.max(0, ...values);
+  const minValue = Math.min(0, ...values);
+  const range = maxValue - minValue || 1;
+  const top = 24;
+  const plotHeight = 140;
+  const baseline = top + ((maxValue / range) * plotHeight);
+  const barWidth = Math.min(56, Math.max(24, 250 / Math.max(chartItems.length, 1)));
+  const step = 330 / Math.max(chartItems.length, 1);
+  const yFor = (value) => top + ((maxValue - value) / range) * plotHeight;
+
+  return <figure className="finance-chart">
+    <svg viewBox="0 0 390 222" role="img" aria-label={description}>
+      <title>{description}</title>
+      {[top, top + plotHeight / 2, top + plotHeight].map((y) => <line className="finance-chart-gridline" x1="32" x2="370" y1={y} y2={y} key={y} />)}
+      <line className="finance-chart-baseline" x1="32" x2="370" y1={baseline} y2={baseline} />
+      {chartItems.map((item, index) => {
+        const value = Number(item.value);
+        const y = yFor(value);
+        const height = Math.max(2, Math.abs(y - baseline));
+        const x = 42 + index * step + (step - barWidth) / 2;
+        const labelY = value >= 0 ? y - 7 : y + height + 15;
+        return <g key={item.label}>
+          <rect className={`finance-chart-bar ${item.tone || 'profit'}`} x={x} y={Math.min(y, baseline)} width={barWidth} height={height} />
+          <text className="finance-chart-value" x={x + barWidth / 2} y={labelY}>{formatCompactRupees(value)}</text>
+          <text className="finance-chart-label" x={x + barWidth / 2} y="192">{item.label}</text>
+        </g>;
+      })}
+      <text className="finance-chart-zero" x="34" y={baseline - 5}>₹0</text>
+    </svg>
+    <figcaption>{description}</figcaption>
+  </figure>;
+}
+
+function Panel({ title, eyebrow, icon: Icon, id, className = '', children }) {
   return (
-    <section className="panel" id={id}>
+    <section className={`panel ${className}`.trim()} id={id}>
       <div className="panel-heading">
         <div>
           <p className="eyebrow">{eyebrow}</p>
@@ -1095,7 +1166,7 @@ function SelectField({ label, value, values, onChange }) {
       {label}
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {values.map((item) => (
-          <option key={item}>{item}</option>
+          <option key={item || 'empty'} value={item}>{item || `Select ${label}`}</option>
         ))}
       </select>
     </label>
