@@ -33,8 +33,11 @@ jobs:
       - name: Format check
         run: ruff format --check app scripts tests
 
-      - name: Train the optional crop model
-        run: python scripts/train_model.py
+      - name: Build the derived dataset and train the optional crop model
+        # The derived dataset is generated, not committed, so it must be built first.
+        run: |
+          python scripts/build_dataset.py
+          python scripts/train_model.py
 
       - name: Tests
         # No API keys are configured here on purpose: the suite must be hermetic, and the keys

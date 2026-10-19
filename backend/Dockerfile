@@ -16,8 +16,10 @@ COPY data/crop_training_sample.csv ./data/crop_training_sample.csv
 COPY scripts ./scripts
 
 # The crop model is optional: the ranking falls back to transparent rules when it is absent, so a
-# training failure must not fail the image build.
-RUN python scripts/train_model.py || echo "crop model not trained; the API will use rules only"
+# training failure must not fail the image build. The derived dataset is generated rather than
+# committed, so it is built here first.
+RUN python scripts/build_dataset.py && python scripts/train_model.py \
+    || echo "crop model not trained; the API will use rules only"
 
 # Run as a non-root user, and give it ownership of the writable data directory.
 RUN useradd --create-home --uid 10001 annapurna \
