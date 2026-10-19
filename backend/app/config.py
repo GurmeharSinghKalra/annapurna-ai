@@ -107,8 +107,6 @@ class Settings:
     gemini_model: str = field(default_factory=lambda: _text("GEMINI_MODEL", "gemini-3.8-flash"))
     gemini_timeout_seconds: float = field(default_factory=lambda: _number("GEMINI_TIMEOUT_SECONDS", 20))
     agmarknet_api_key: str | None = field(default_factory=lambda: _optional("AGMARKNET_API_KEY"))
-    agmarknet_source_url: str | None = field(default_factory=lambda: _optional("AGMARKNET_SOURCE_URL"))
-    enam_source_url: str | None = field(default_factory=lambda: _optional("ENAM_SOURCE_URL"))
 
     # --- http -----------------------------------------------------------------
     cors_origins: tuple[str, ...] = field(default_factory=cors_origins)

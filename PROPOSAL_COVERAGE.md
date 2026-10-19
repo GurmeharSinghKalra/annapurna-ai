@@ -40,10 +40,10 @@ These need credentials, datasets or partners, and are not pretended to exist:
 cd backend
 ruff check app scripts tests && ruff format --check app scripts tests
 python scripts/build_dataset.py && python scripts/train_model.py
-python -m pytest                                    # 137 tests
+python -m pytest                                    # 169 tests
 alembic upgrade head && alembic downgrade base && alembic upgrade head
 
 cd ..
-npm run lint && npm test -- --run && npm run build  # 35 tests
+npm run lint && npm test -- --run && npm run build  # 38 tests
 docker compose config
 ```

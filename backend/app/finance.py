@@ -87,6 +87,10 @@ def season_financial_plan(request: FinancialPlanRequest, prices: dict[str, int] 
         price = request.market_price_per_quintal
         planning_source = "farmer-entered local mandi price"
         price_note = "You supplied this price. Check it is for the right crop, unit, mandi and date."
+    elif selected.crop in request.farm.known_market_prices:
+        price = request.farm.known_market_prices[selected.crop]
+        planning_source = "the price you entered for your own mandi"
+        price_note = "You supplied this price. Check it is for the right crop, unit, mandi and date."
     else:
         price = selected.market_price
         planning_source = selected.price_basis

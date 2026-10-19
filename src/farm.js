@@ -37,9 +37,11 @@ export const emptyFarm = {
   rainfall: '',
   budget: '',
   marketPriority: '',
+  knownMarketPrices: {},
 };
 
-export const FARM_FIELDS = Object.keys(emptyFarm);
+// knownMarketPrices is an optional map, not a form field, so it is excluded from validation.
+export const FARM_FIELDS = Object.keys(emptyFarm).filter((key) => key !== 'knownMarketPrices');
 
 // Field label and valid range, used for both the form and client-side validation so the farmer
 // is told what is wrong before a request is sent.
@@ -88,6 +90,11 @@ export function toApiFarm(farm) {
     rainfall: Number(farm.rainfall),
     budget: Number(farm.budget),
     market_priority: farm.marketPriority,
+    known_market_prices: Object.fromEntries(
+      Object.entries(farm.knownMarketPrices || {})
+        .map(([crop, value]) => [crop, Math.round(Number(value))])
+        .filter(([, value]) => Number.isFinite(value) && value >= 1)
+    ),
   };
 }
 
@@ -111,6 +118,7 @@ export function fromApiFarm(payload) {
     rainfall: String(payload.rainfall ?? ''),
     budget: String(payload.budget ?? ''),
     marketPriority: payload.market_priority ?? '',
+    knownMarketPrices: payload.known_market_prices ?? {},
   };
 }
 

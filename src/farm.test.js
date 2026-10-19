@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyFarm, isFarmComplete, normalizeRecommendation, toApiFarm, validateFarm, FALLBACK_CROPS } from './farm.js';
+import { emptyFarm, fromApiFarm, isFarmComplete, normalizeRecommendation, toApiFarm, validateFarm, FALLBACK_CROPS } from './farm.js';
 
 const complete = {
   farmerName: 'Gurmehar', location: 'Sonipat, Haryana', language: 'English', landSize: '2',
@@ -11,7 +11,9 @@ const complete = {
 describe('validation', () => {
   it('reports every missing field on an empty profile', () => {
     const problems = validateFarm(emptyFarm);
-    expect(Object.keys(problems)).toHaveLength(Object.keys(emptyFarm).length);
+    // knownMarketPrices is an optional map, not a required form field.
+    expect(Object.keys(problems)).toHaveLength(Object.keys(emptyFarm).length - 1);
+    expect(problems.knownMarketPrices).toBeUndefined();
     expect(isFarmComplete(emptyFarm)).toBe(false);
   });
 
@@ -74,6 +76,25 @@ describe('recommendation normalisation', () => {
 
   it('returns null for a missing item instead of throwing', () => {
     expect(normalizeRecommendation(null)).toBeNull();
+  });
+});
+
+describe('farmer-entered mandi prices', () => {
+  it('are sent to the API, rounded, with blanks and junk dropped', () => {
+    const payload = toApiFarm({
+      ...complete,
+      knownMarketPrices: { Cotton: '8900.4', Wheat: '', Maize: 'abc', Rice: 0 },
+    });
+    expect(payload.known_market_prices).toEqual({ Cotton: 8900 });
+  });
+
+  it('default to an empty map rather than undefined', () => {
+    expect(toApiFarm(complete).known_market_prices).toEqual({});
+  });
+
+  it('survive a round trip through the API shape', () => {
+    const restored = fromApiFarm({ ...toApiFarm({ ...complete, knownMarketPrices: { Cotton: 8900 } }) });
+    expect(restored.knownMarketPrices).toEqual({ Cotton: 8900 });
   });
 });
 

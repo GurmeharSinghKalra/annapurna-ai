@@ -35,7 +35,8 @@ def test_crops_returns_the_catalogue_with_its_provenance(client):
 
 def test_recommendations_carry_verdicts_limiters_and_a_price_basis(client, farm):
     body = client.post("/recommendations", json=farm).json()
-    assert body["ai_provider"] == "local_fallback"
+    assert body["ai_provider"] == "none"
+    assert "GEMINI_API_KEY" in body["ai_provider_note"]
     for item in body["recommendations"]:
         assert 0 <= item["suitability"] <= 100
         assert item["verdict"]
@@ -153,3 +154,78 @@ def test_openapi_document_builds(client):
     paths = schema.json()["paths"]
     for route in ("/health", "/analysis", "/finance/season-plan", "/auth/login", "/plans", "/reports/pdf"):
         assert route in paths, route
+
+
+def test_analysis_ranking_does_not_change_with_the_weather_reading(client, farm, monkeypatch):
+    """Crop bands are whole-season means. Substituting one instant made the same farm rank
+    differently depending on the hour it was asked: a 15C reading put Maize first and Rice
+    fifth, a 44C reading reversed it."""
+    import httpx
+
+    from app import weather as weather_module
+    from app.config import reload_settings
+
+    def make_handler(temperature):
+        def handler(url, params=None, **kwargs):
+            class Response:
+                status_code = 200
+
+                def raise_for_status(self):
+                    return None
+
+                def json(self):
+                    if "geo" in url:
+                        return [{"lat": 29.0, "lon": 77.0, "name": "Sonipat", "country": "IN"}]
+                    if "forecast" in url:
+                        return {"list": []}
+                    return {
+                        "main": {"temp": temperature, "humidity": 40},
+                        "weather": [{"description": "clear"}],
+                        "wind": {"speed": 1},
+                        "dt": 1,
+                    }
+
+            return Response()
+
+        return handler
+
+    def install(handler):
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def get(self, url, params=None, **kwargs):
+                return handler(url, params)
+
+        monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    baseline = [
+        (item["crop"], item["suitability"])
+        for item in client.post("/recommendations", json=farm).json()["recommendations"]
+    ]
+
+    monkeypatch.setenv("OPENWEATHER_API_KEY", "test-key")
+    monkeypatch.setattr(weather_module, "settings", reload_settings())
+    try:
+        for temperature in (15.0, 44.0):
+            weather_module._weather_cache.clear()
+            weather_module._geocode_cache.clear()
+            install(make_handler(temperature))
+            body = client.post("/analysis", json=farm).json()
+            ranked = [(item["crop"], item["suitability"]) for item in body["recommendations"]]
+            assert ranked == baseline, f"a {temperature}C reading changed the ranking"
+            # The live reading is still reported, just not scored.
+            assert body["weather"]["live"] is True
+            assert body["weather"]["temperature"] == temperature
+            # And the profile that was actually scored is returned.
+            assert body["analyzed_farm"]["temperature"] == farm["temperature"]
+    finally:
+        monkeypatch.delenv("OPENWEATHER_API_KEY", raising=False)
+        reload_settings()
+        weather_module._weather_cache.clear()

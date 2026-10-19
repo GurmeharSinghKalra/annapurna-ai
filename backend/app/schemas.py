@@ -46,6 +46,29 @@ class FarmProfile(BaseModel):
     )
     budget: float = Field(default=35_000, ge=0, le=100_000_000, description="Planning budget in INR")
     market_priority: MarketPriority = "Balanced"
+    known_market_prices: dict[str, Annotated[int, Field(ge=1, le=1_000_000)]] = Field(
+        default_factory=dict,
+        max_length=12,
+        description=(
+            "Prices the farmer knows for their own mandi, as crop name to INR per quintal. "
+            "These override both the live feed and the reference price, because a farmer "
+            "standing in their mandi knows their realisable rate better than any national feed. "
+            "This is how the product stays useful where no price feed reaches."
+        ),
+    )
+
+    @field_validator("known_market_prices")
+    @classmethod
+    def _known_crops(cls, value: dict[str, int]) -> dict[str, int]:
+        from .crop_data import CROPS_BY_NAME
+
+        unknown = set(value) - set(CROPS_BY_NAME)
+        if unknown:
+            raise ValueError(
+                f"Not crops this planner covers: {', '.join(sorted(unknown))}. "
+                f"Valid crops: {', '.join(sorted(CROPS_BY_NAME))}"
+            )
+        return value
 
     @field_validator("farmer_name", "location")
     @classmethod

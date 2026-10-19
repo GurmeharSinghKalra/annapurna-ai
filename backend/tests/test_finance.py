@@ -126,3 +126,24 @@ def test_plan_carries_its_disclaimer_and_price_basis():
     plan = season_financial_plan(request_for())
     assert "not a loan" in plan["disclaimer"].lower()
     assert plan["price_note"]
+
+
+def test_a_farmer_entered_price_drives_the_season_budget_too():
+    """The planner and the budget must agree on the price, or break-even is computed from a
+    number the farmer never saw."""
+    plain = season_financial_plan(request_for("Cotton", soil_type="Black"))
+    own = season_financial_plan(request_for("Cotton", soil_type="Black", known_market_prices={"Cotton": 9500}))
+    assert own["summary"]["planning_market_price_per_quintal"] == 9500
+    assert own["planning_source"] == "the price you entered for your own mandi"
+    assert own["summary"]["expected_revenue"] > plain["summary"]["expected_revenue"]
+    # Break-even is a cost-side figure, so it must not move with the sale price.
+    assert own["summary"]["break_even_price_per_quintal"] == plain["summary"]["break_even_price_per_quintal"]
+
+
+def test_an_explicit_request_price_still_wins_over_the_stored_one():
+    plan = season_financial_plan(
+        request_for("Cotton", soil_type="Black", known_market_prices={"Cotton": 9500}).model_copy(
+            update={"market_price_per_quintal": 8000}
+        )
+    )
+    assert plan["summary"]["planning_market_price_per_quintal"] == 8000

@@ -514,3 +514,53 @@ def integration_status_market(client) -> dict:
     from app.integrations import integration_status
 
     return integration_status()["market"]
+
+
+@pytest.mark.allow_http
+async def test_a_stale_price_keeps_the_source_it_actually_came_from(monkeypatch, client, farm):
+    """A cached community-mirror price was being labelled "AGMARKNET cached price", attributing
+    it to a feed it never came from."""
+    state = {"fail": False}
+
+    def handler(url, params):
+        if state["fail"]:
+            raise httpx.ConnectError("upstream down")
+        return FakeResponse(
+            {
+                "success": True,
+                "data": [
+                    {
+                        "state": "Punjab",
+                        "district": "Nawanshahr",
+                        "market": "Nawanshahar APMC",
+                        "commodity": params.get("commodity", "Wheat"),
+                        "modal_price": 2625,
+                        "arrival_date": "2026-09-09",
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setenv("KEYLESS_MARKET_FALLBACK", "true")
+    monkeypatch.setenv("MARKET_CACHE_TTL_MINUTES", "0")  # force the stale path on the second call
+    monkeypatch.setattr(market_data, "settings", reload_settings())
+    install_client(monkeypatch, handler)
+    try:
+        payload = {**farm, "location": "Nawanshahr, Punjab", "season": "Rabi", "temperature": 18, "rainfall": 150}
+        first = client.post("/market", json=payload)
+        assert first.status_code == 200
+        assert first.json()["source"] == market_data.KEYLESS_SOURCE
+
+        # Upstream now fails, so the cached row is served instead.
+        state["fail"] = True
+        market_data.clear_miss_cache()
+        stale = client.post("/market", json=payload)
+        assert stale.status_code == 200
+        source = stale.json()["source"]
+        assert "cached" in source
+        assert "Community mirror" in source
+        assert "AGMARKNET daily mandi price" not in source, "must not attribute a mirror price to AGMARKNET"
+    finally:
+        monkeypatch.delenv("KEYLESS_MARKET_FALLBACK", raising=False)
+        monkeypatch.delenv("MARKET_CACHE_TTL_MINUTES", raising=False)
+        reload_settings()

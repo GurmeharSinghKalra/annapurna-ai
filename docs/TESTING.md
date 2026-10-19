@@ -3,13 +3,13 @@
 ## Running
 
 ```bash
-# Backend: 137 tests
+# Backend: 169 tests
 cd backend
 python -m pytest                      # all
 python -m pytest tests/test_security.py -v
 python -m pytest -k break_even
 
-# Frontend: 35 tests
+# Frontend: 38 tests
 npm test                              # watch mode
 npm test -- --run                     # once
 ```

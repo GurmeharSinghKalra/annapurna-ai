@@ -82,9 +82,10 @@ def test_irrigation_changes_the_water_budget():
 
 
 def test_soil_mismatch_is_a_limiter_not_a_small_deduction():
-    cotton = next(item for item in recommend(profile(soil_type="Alluvial")) if item.crop == "Cotton")
-    assert cotton.suitability <= 62
-    assert any("soil" in text for text in cotton.limiters)
+    # Rice wants alluvial or clayey; sandy loam drains too fast to hold a flooded paddy.
+    rice = next(item for item in recommend(profile(soil_type="Sandy loam")) if item.crop == "Rice")
+    assert rice.suitability <= 62
+    assert any("soil" in text for text in rice.limiters)
 
 
 def test_sustainability_responds_to_the_field_not_just_the_crop():
@@ -255,3 +256,60 @@ def test_the_model_cannot_override_a_hard_limiter(monkeypatch):
     wheat = next(item for item in recommend(profile(season="Kharif")) if item.crop == "Wheat")
     assert wheat.suitability <= 30
     assert wheat.verdict == "not recommended"
+
+
+def test_cotton_is_not_penalised_on_the_soil_it_is_actually_grown_on_here():
+    """Black (regur) soil is the Deccan cotton soil. Haryana's cotton belt - Sirsa, Hisar,
+    Fatehabad - is sandy alluvium, so the app was telling a Sirsa cotton farmer that the soil
+    under their own cotton was wrong for the crop."""
+    for soil in ("Alluvial", "Sandy loam", "Loamy", "Black"):
+        cotton = next(item for item in recommend(profile(soil_type=soil)) if item.crop == "Cotton")
+        assert not any("soil" in text for text in cotton.limiters), f"{soil} wrongly limits cotton"
+    # A soil cotton genuinely does badly on must still be flagged.
+    clayey = next(item for item in recommend(profile(soil_type="Clayey")) if item.crop == "Cotton")
+    assert any("soil" in text for text in clayey.limiters)
+
+
+# --------------------------------------------------------------------- farmer-entered prices
+
+
+def test_a_price_the_farmer_entered_beats_the_reference_price():
+    """No national feed reaches every district. In one it does not, the farmer's own mandi rate
+    is the only real price available — and it is a better input than a support price anywhere."""
+    without = next(i for i in recommend(profile()) if i.crop == "Cotton")
+    assert "MSP" in without.price_basis
+
+    with_own = next(i for i in recommend(profile(known_market_prices={"Cotton": 8900})) if i.crop == "Cotton")
+    assert with_own.market_price == 8900
+    assert with_own.price_basis == "the price you entered for your own mandi"
+    assert with_own.expected_profit > without.expected_profit
+
+
+def test_a_farmers_price_also_beats_a_live_feed_price():
+    """A feed reports a market average; the farmer reports what they can actually get."""
+    item = next(
+        i for i in recommend(profile(known_market_prices={"Wheat": 2900}), prices={"Wheat": 2500}) if i.crop == "Wheat"
+    )
+    assert item.market_price == 2900
+    assert item.price_basis == "the price you entered for your own mandi"
+
+
+def test_an_entered_price_only_affects_the_crop_it_was_entered_for():
+    ranked = {i.crop: i for i in recommend(profile(known_market_prices={"Cotton": 8900}))}
+    assert ranked["Cotton"].price_basis == "the price you entered for your own mandi"
+    assert "MSP" in ranked["Wheat"].price_basis
+
+
+def test_an_entered_price_flows_through_to_the_whole_economics():
+    item = next(i for i in recommend(profile(known_market_prices={"Maize": 3000})) if i.crop == "Maize")
+    expected = round(item.economics.expected_yield_quintal.typical * 3000)
+    assert item.estimated_revenue == expected
+    assert item.economics.estimated_revenue_inr.low == round(item.economics.expected_yield_quintal.low * 3000)
+
+
+def test_a_price_for_a_crop_the_planner_does_not_cover_is_refused():
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError) as caught:
+        profile(known_market_prices={"Quinoa": 5000})
+    assert "Quinoa" in str(caught.value)

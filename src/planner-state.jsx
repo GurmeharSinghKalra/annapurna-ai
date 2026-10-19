@@ -18,6 +18,7 @@ export function PlannerProvider({ children }) {
   const [farm, setFarm] = useState(() => ({ ...emptyFarm, ...storage.json(FARM_KEY, {}) }));
   const [analysis, setAnalysis] = useState(null);
   const [financePlan, setFinancePlan] = useState(null);
+  const [expenseCrop, setExpenseCrop] = useState(() => storage.json(FINANCE_KEY, {}).crop || null);
   const [actualExpenses, setActualExpenses] = useState(() => storage.json(FINANCE_KEY, {}).actualExpenses || {});
   const [manualPrice, setManualPrice] = useState(() => storage.json(FINANCE_KEY, {}).manualPrice || '');
   const [plans, setPlans] = useState([]);
@@ -42,8 +43,8 @@ export function PlannerProvider({ children }) {
   }, [farm]);
 
   useEffect(() => {
-    storage.set(FINANCE_KEY, JSON.stringify({ actualExpenses, manualPrice }));
-  }, [actualExpenses, manualPrice]);
+    storage.set(FINANCE_KEY, JSON.stringify({ crop: expenseCrop, actualExpenses, manualPrice }));
+  }, [expenseCrop, actualExpenses, manualPrice]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +101,24 @@ export function PlannerProvider({ children }) {
     });
   }, []);
 
+  /** Record what the farmer says their own mandi pays. Blank clears it. */
+  const setKnownPrice = useCallback((crop, value) => {
+    setFarm((current) => {
+      const next = { ...(current.knownMarketPrices || {}) };
+      const amount = Math.round(Number(value));
+      if (String(value).trim() === '' || !Number.isFinite(amount) || amount < 1) {
+        if (!(crop in next)) return current;
+        delete next[crop];
+      } else {
+        if (next[crop] === amount) return current;
+        next[crop] = amount;
+      }
+      // This changes the money, so the shown analysis no longer matches the inputs.
+      setStale(true);
+      return { ...current, knownMarketPrices: next };
+    });
+  }, []);
+
   const applyFarm = useCallback((payload) => {
     setFarm(fromApiFarm(payload));
     setAnalysis(null);
@@ -120,11 +139,14 @@ export function PlannerProvider({ children }) {
 
   const runFinance = useCallback(
     async (crop, yieldCase = 'typical') => {
+      // Amounts tracked against a different crop are not this crop's actuals. Sending them
+      // would silently corrupt cost, profit, margin, break-even and all four scenarios.
+      const ownExpenses = expenseCrop === crop ? actualExpenses : {};
       const payload = {
         farm: toApiFarm(farm),
         crop,
         actual_expenses: Object.fromEntries(
-          Object.entries(actualExpenses)
+          Object.entries(ownExpenses)
             .map(([key, value]) => [key, Number(value)])
             .filter(([, value]) => Number.isFinite(value) && value >= 0)
         ),
@@ -136,7 +158,9 @@ export function PlannerProvider({ children }) {
       }
       const plan = await api.seasonPlan(payload);
       setFinancePlan(plan);
-      // Adopt whatever the server actually budgeted, so the tracker and the plan never diverge.
+      // Adopt whatever the server actually budgeted, so the tracker and the plan never diverge,
+      // and record which crop these amounts belong to.
+      setExpenseCrop(plan.crop);
       setActualExpenses(Object.fromEntries(plan.expenses.map((item) => [item.category, String(item.actual)])));
       if (isSignedIn) {
         try {
@@ -152,7 +176,7 @@ export function PlannerProvider({ children }) {
       }
       return plan;
     },
-    [farm, actualExpenses, manualPrice, isSignedIn]
+    [farm, expenseCrop, actualExpenses, manualPrice, isSignedIn]
   );
 
   const savePlan = useCallback(async () => {
@@ -209,6 +233,7 @@ export function PlannerProvider({ children }) {
     setAnalysis(null);
     setFinancePlan(null);
     setActualExpenses({});
+    setExpenseCrop(null);
     setManualPrice('');
     setPlans([]);
     setStale(false);
@@ -219,15 +244,15 @@ export function PlannerProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      farm, update, applyFarm, problems, profileComplete, stale,
+      farm, update, applyFarm, setKnownPrice, problems, profileComplete, stale,
       analysis, recommendations, topCrop, runAnalysis,
-      financePlan, runFinance, actualExpenses, setActualExpenses, manualPrice, setManualPrice,
+      financePlan, runFinance, actualExpenses, setActualExpenses, expenseCrop, manualPrice, setManualPrice,
       plans, savePlan, removePlan, loadPlans,
       integrations, cropNames, notice, setNotice, clearLocalData,
     }),
     [
-      farm, update, applyFarm, problems, profileComplete, stale, analysis, recommendations, topCrop,
-      runAnalysis, financePlan, runFinance, actualExpenses, manualPrice, plans, savePlan,
+      farm, update, applyFarm, setKnownPrice, problems, profileComplete, stale, analysis, recommendations, topCrop,
+      runAnalysis, financePlan, runFinance, actualExpenses, expenseCrop, manualPrice, plans, savePlan,
       removePlan, loadPlans, integrations, cropNames, notice, clearLocalData,
     ]
   );

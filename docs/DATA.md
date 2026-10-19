@@ -53,6 +53,28 @@ Two details that matter for correctness:
   upstream request on every analysis, which is how a shared quota gets exhausted. Misses are
   cached for `MARKET_MISS_TTL_SECONDS` (default 30 minutes).
 
+### Where no feed reaches: the farmer's own price
+
+No keyless source covers every state. Tested, as of 2026-10-19:
+
+| Source | Keyless | Haryana | Result |
+| --- | --- | --- | --- |
+| data.gov.in AGMARKNET (official) | no | yes | free, but needs registration |
+| CEDA / Ashoka Agmarknet mirror | no | yes | `401 Unauthorised, no api key passed` |
+| mandi-api community mirror | yes | **no** | works; 5 states only |
+| tgkagro price feed | yes | no | export FOB pricing, no mandi breakdown |
+| agmarknet.gov.in website | yes | yes | scraping only: fragile, ToS risk |
+
+So for a Haryana farmer with no key there is no feed at all. The answer is not to invent one:
+**the farmer's own mandi price is a first-class input.** `FarmProfile.known_market_prices` maps a
+crop to the rate they know, entered inline on the crop card next to the figure it replaces, and
+it overrides both the live feed and the reference price everywhere — ranking, revenue, profit,
+break-even and every scenario — labelled `the price you entered for your own mandi`.
+
+This is not a consolation prize. A national feed reports a market average for a district; a
+farmer standing in their mandi knows the rate they can actually get, which is the number their
+break-even genuinely depends on. Where a feed does reach, theirs still wins, for the same reason.
+
 ### Commodity naming
 
 AGMARKNET filters are exact-match and the dataset does not use everyday crop names. Filtering on

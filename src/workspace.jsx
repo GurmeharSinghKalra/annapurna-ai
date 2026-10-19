@@ -179,7 +179,7 @@ function Routes({ route, navigate, profileComplete, topCrop }) {
 // --------------------------------------------------------------------------- planner
 
 function PlannerPage() {
-  const { farm, update, problems, profileComplete, recommendations, analysis, topCrop, runAnalysis, savePlan, cropNames, stale } = usePlanner();
+  const { farm, update, setKnownPrice, problems, profileComplete, recommendations, analysis, topCrop, runAnalysis, savePlan, cropNames, stale } = usePlanner();
   const { isSignedIn } = useAuth();
   const [showProblems, setShowProblems] = useState(false);
 
@@ -234,7 +234,14 @@ function PlannerPage() {
           {recommendations.length === 0 ? (
             <p className="panel-copy">Run the analysis to see which crops suit this field and which do not.</p>
           ) : (
-            recommendations.map((crop) => <CropCard crop={crop} key={crop.crop} />)
+            recommendations.map((crop) => (
+              <CropCard
+                crop={crop}
+                key={crop.crop}
+                knownPrice={farm.knownMarketPrices?.[crop.crop] ?? ''}
+                onKnownPrice={(value) => setKnownPrice(crop.crop, value)}
+              />
+            ))
           )}
         </div>
         <div className="planner-actions">
@@ -272,8 +279,9 @@ function PlannerPage() {
   );
 }
 
-function CropCard({ crop }) {
+function CropCard({ crop, knownPrice, onKnownPrice }) {
   const economics = crop.economics;
+  const usingOwnPrice = crop.priceBasis === 'the price you entered for your own mandi';
   return (
     <article className={`crop-card tone-${crop.verdict.replace(/\s+/g, '-')}`}>
       <div className="crop-head">
@@ -304,9 +312,35 @@ function CropCard({ crop }) {
         </div>
       </div>
 
+      {onKnownPrice && (
+        <label className="own-price">
+          <span>
+            Your mandi price
+            <small>{usingOwnPrice ? 'Used for every figure below.' : 'Know a better rate? It replaces the one below.'}</small>
+          </span>
+          <span className="own-price-input">
+            <i aria-hidden="true">₹</i>
+            <input
+              type="number"
+              min="1"
+              step="10"
+              inputMode="numeric"
+              value={knownPrice}
+              placeholder={String(crop.marketPrice)}
+              onChange={(event) => onKnownPrice(event.target.value)}
+              aria-label={`Your own mandi price for ${crop.crop}, rupees per quintal`}
+            />
+            <em>/quintal</em>
+          </span>
+        </label>
+      )}
+
       {economics && (
         <table className="crop-economics">
-          <caption>Estimated for {crop.durationDays} days · price {inr(crop.marketPrice)}/quintal ({crop.priceBasis})</caption>
+          <caption>
+            Estimated for {crop.durationDays} days · price {inr(crop.marketPrice)}/quintal
+            {' '}<b className={usingOwnPrice ? 'price-basis own' : 'price-basis'}>({crop.priceBasis})</b>
+          </caption>
           <thead>
             <tr><th scope="col" /><th scope="col">Poor</th><th scope="col">Typical</th><th scope="col">Good</th></tr>
           </thead>
@@ -526,7 +560,7 @@ function InsightsPage() {
 function FinancePage({ navigate }) {
   const {
     topCrop, recommendations, financePlan, runFinance, actualExpenses, setActualExpenses,
-    manualPrice, setManualPrice,
+    expenseCrop, manualPrice, setManualPrice,
   } = usePlanner();
   const [crop, setCrop] = useState(topCrop.crop);
   const [yieldCase, setYieldCase] = useState('typical');
@@ -543,6 +577,12 @@ function FinancePage({ navigate }) {
         </p>
         <div className="form-grid two">
           <SelectField label="Crop" value={crop} values={recommendations.map((item) => item.crop)} onChange={setCrop} />
+          {expenseCrop && expenseCrop !== crop && (
+            <p className="field-hint cross-crop-note">
+              Costs you tracked for {expenseCrop} stay with {expenseCrop}. This budget starts from
+              the planned figures for {crop}.
+            </p>
+          )}
           <SelectField
             label="Budget against"
             value={yieldCase}
@@ -635,7 +675,11 @@ function FinancePage({ navigate }) {
                     type="number"
                     min="0"
                     step="100"
-                    value={actualExpenses[expense.category] ?? String(expense.actual)}
+                    value={
+                      expenseCrop === financePlan.crop
+                        ? actualExpenses[expense.category] ?? String(expense.actual)
+                        : String(expense.actual)
+                    }
                     onChange={(event) =>
                       setActualExpenses((current) => ({ ...current, [expense.category]: event.target.value }))
                     }

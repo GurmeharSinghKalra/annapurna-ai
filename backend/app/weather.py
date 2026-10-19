@@ -171,11 +171,19 @@ async def fetch_weather(farm: FarmProfile) -> dict[str, Any]:
     except (httpx.HTTPError, KeyError, ValueError, TypeError):
         return _offline(farm, "the weather provider could not be reached")
 
-    main = current.get("main") or {}
-    temperature = float(main.get("temp", farm.temperature))
-    humidity = float(main.get("humidity", farm.humidity))
-    rain_1h = float((current.get("rain") or {}).get("1h") or 0)
-    conditions = (current.get("weather") or [{}])[0].get("description")
+    # Parsing happens inside its own guard: a 200 with an unexpected body shape is a provider
+    # problem, not a reason to fail the farmer's whole analysis. A JSON list, a string
+    # temperature, a dict where a list belongs and a null body all reached here as 500s.
+    try:
+        main = current.get("main") or {}
+        temperature = float(main.get("temp", farm.temperature))
+        humidity = float(main.get("humidity", farm.humidity))
+        rain_1h = float((current.get("rain") or {}).get("1h") or 0)
+        conditions = (current.get("weather") or [{}])[0].get("description")
+        wind_speed = round(float((current.get("wind") or {}).get("speed") or 0), 1)
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        logger.warning("OpenWeather returned an unexpected body shape for %r", farm.location)
+        return _offline(farm, "the weather provider returned an unexpected response")
     alert, severity = _advisory(temperature, humidity, rain_1h, forecast_rain)
 
     result = {
@@ -188,7 +196,7 @@ async def fetch_weather(farm: FarmProfile) -> dict[str, Any]:
         "humidity": round(humidity),
         "recent_rain_mm_1h": rain_1h,
         "forecast_rain_mm_5d": forecast_rain,
-        "wind_speed_m_s": round(float((current.get("wind") or {}).get("speed") or 0), 1),
+        "wind_speed_m_s": wind_speed,
         "conditions": conditions,
         "alert": alert,
         "alert_severity": severity,

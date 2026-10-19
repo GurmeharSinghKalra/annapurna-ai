@@ -81,7 +81,10 @@ def _load() -> LoadedModel | None:
     try:
         metrics = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
         pipeline = joblib.load(MODEL_PATH)
-    except (OSError, ValueError, EOFError, ImportError, json.JSONDecodeError) as exc:
+    # Deliberately broad: the model is an optional artefact, and a corrupt one raises whatever
+    # the pickle happens to hit - KeyError, struct.error, anything. None of it should be able to
+    # take down /health or every recommend()-backed route.
+    except Exception as exc:
         logger.warning("Crop model unavailable; ranking continues on rules alone: %s", exc)
         return None
 

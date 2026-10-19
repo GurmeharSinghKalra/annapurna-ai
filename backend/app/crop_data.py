@@ -125,7 +125,10 @@ CROPS: tuple[Crop, ...] = (
         name="Cotton",
         season="Kharif",
         duration_days=Range(160, 180, 210),
-        soils=("Black", "Loamy"),
+        # Black (regur) soil is the Deccan cotton soil. Haryana's own cotton belt - Sirsa,
+        # Hisar, Fatehabad - is sandy alluvium, so listing only black and loamy soil made the
+        # app tell a Sirsa cotton farmer their soil was wrong for the crop they actually grow.
+        soils=("Alluvial", "Sandy loam", "Loamy", "Black"),
         rainfall_mm_season=(500, 900),
         temperature_c=(21, 35),
         ph=(6.0, 8.0),
@@ -148,6 +151,7 @@ CROPS: tuple[Crop, ...] = (
         sources=(
             "Textile Commissioner MSP order, cotton season 2026-27 (medium staple Rs 8,267/quintal)",
             "Haryana agricultural-university cost study: average cost Rs 40,024/acre against Rs 24,081/acre returns",
+            "ICAR-CRIDA contingency plans, Sirsa / Hisar / Fatehabad (Western Zone HR-2): sandy alluvial soils",
         ),
     ),
     Crop(

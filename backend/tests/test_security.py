@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import pytest
 from PIL import Image
 
 from app.deps import SlidingWindowLimiter
@@ -228,3 +229,24 @@ def test_removed_prototype_routes_are_gone(client):
     """The old SQLite auth/history prototype must not be reachable."""
     assert client.post("/auth/register", json={}).status_code == 422  # exists, but validates
     assert client.get("/history").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "finance",
+    [
+        {"summary": [1, 2, 3]},
+        {"summary": {}, "expenses": ["a", "b"]},
+        {"scenarios": ["x"]},
+        {"expenses": [1, 2]},
+        {"summary": "not a mapping"},
+        [1, 2, 3],
+        "a string",
+    ],
+)
+def test_a_malformed_finance_payload_cannot_500_the_pdf(client, farm, finance):
+    """`finance` is a free-form dict, so a caller can put a list where a mapping belongs.
+    Four such shapes used to reach a `.get` on an int and return a 500."""
+    response = client.post("/reports/pdf", json={"farm": farm, "crop": "Maize", "finance": finance})
+    assert response.status_code in {200, 422}, response.text
+    if response.status_code == 200:
+        assert response.content.startswith(b"%PDF-")

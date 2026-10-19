@@ -1200,3 +1200,33 @@ input, select { border: 1px solid #aeb9b2; border-radius: 8px; background: #fff;
 
 .app-topbar h2:focus { outline: 3px solid #f5b748; outline-offset: 4px; }
 .app-topbar h2:focus:not(:focus-visible) { outline: none; }
+
+/* A farmer's own mandi rate, entered beside the figure it replaces. Where no price feed
+   reaches — most of India — this is the only real price available, so it is given the same
+   weight on screen as the number it overrides. */
+.own-price {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 11px;
+  padding: 9px 11px;
+  border: 2px dashed var(--line);
+  background: #fffdf6;
+}
+.own-price > span:first-child { display: flex; flex-direction: column; gap: 1px; font-size: 0.78rem; font-weight: 700; }
+.own-price small { font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.own-price-input { display: inline-flex; align-items: center; gap: 4px; }
+.own-price-input i { font-style: normal; font-weight: 700; color: var(--muted); }
+.own-price-input em { font-style: normal; font-size: 0.73rem; color: var(--muted); }
+.own-price-input input {
+  width: 92px;
+  padding: 5px 7px;
+  border: 2px solid var(--line);
+  background: #fff;
+  text-align: right;
+  font-weight: 600;
+}
+.price-basis { font-weight: 600; }
+.price-basis.own { color: var(--green-dark); }

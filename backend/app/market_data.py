@@ -149,7 +149,10 @@ def _records(payload: object) -> list[dict]:
 def _to_price(value: object) -> int | None:
     try:
         price = round(float(str(value).replace(",", "").strip()))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # float("1e400") is inf, and round(inf) raises OverflowError rather than ValueError.
+        return None
+    if price != price or price in (float("inf"), float("-inf")):
         return None
     # Mandi modal prices are INR/quintal. Anything outside this band is a unit or parsing error,
     # and passing it through would put a nonsense revenue figure in front of a farmer.
@@ -531,7 +534,13 @@ async def _cached(session: AsyncSession, crop: str, state: str, district: str) -
 
 
 async def _stale(session: AsyncSession, crop: str, cached: MarketPriceSnapshot, reason: str) -> dict[str, Any]:
-    scope = Scope(cached.commodity, cached.state, cached.district)
+    """Serve the last price we retrieved, saying plainly how old it is and who published it.
+
+    The source is read back from the cached row rather than assumed. Labelling a cached
+    community-mirror price as "AGMARKNET" would attribute it to a feed it never came from,
+    which is exactly the kind of quiet mislabelling this product exists not to do.
+    """
+    scope = Scope(cached.commodity, cached.state, cached.district, cached.source)
     percent, label = await _trend(session, scope, cached.modal_price_per_quintal)
     age_hours = int((datetime.now(UTC) - _aware(cached.fetched_at)).total_seconds() // 3600)
     return _profile(
@@ -539,8 +548,8 @@ async def _stale(session: AsyncSession, crop: str, cached: MarketPriceSnapshot, 
         cached,
         percent,
         label,
-        f"AGMARKNET cached price ({age_hours}h old)",
-        f"Showing the last price Annapurna retrieved, because {reason}. Confirm the current rate at your mandi.",
+        f"{cached.source} - cached, {age_hours}h old",
+        f"Showing the last price Annapurna retrieved, because {reason} Confirm the current rate at your mandi.",
     )
 
 

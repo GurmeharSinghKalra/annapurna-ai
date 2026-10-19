@@ -29,8 +29,6 @@ os.environ.update(
     GEMINI_API_KEY="",
     AGMARKNET_API_KEY="",
     KEYLESS_MARKET_FALLBACK="false",
-    AGMARKNET_SOURCE_URL="",
-    ENAM_SOURCE_URL="",
     CORS_ORIGINS="http://127.0.0.1:5173,http://localhost:5173",
     AI_RATE_LIMIT_PER_HOUR="1000",
     ANALYSIS_RATE_LIMIT_PER_HOUR="5000",

@@ -108,6 +108,21 @@ state-level rather than district-level, and shares one rate limit across all its
 it cannot answer falls back to a clearly-labelled support price rather than a guess. Get the free
 official key for full coverage, including Haryana.
 
+### Where no feed reaches, the farmer's own price wins
+
+No keyless source covers every state — Haryana among them. So the farmer's own mandi rate is a
+first-class input, entered inline on the crop card beside the figure it replaces:
+
+```
+Your mandi price   [ ₹ 8900 ] /quintal
+Cotton · price ₹8,900/quintal (the price you entered for your own mandi)
+```
+
+It overrides both the live feed and the reference price everywhere — ranking, revenue, profit,
+break-even and every risk scenario. A feed reports a district average; a farmer standing in their
+mandi knows the rate they can actually get, and that is the number their break-even depends on.
+See [`docs/DATA.md`](docs/DATA.md) for the sources tested and why.
+
 ---
 
 ## Project layout
@@ -137,7 +152,7 @@ backend/app/
   security.py / deps.py   hashing, tokens, rate limiting
   routers/                accounts and records
 backend/migrations/       Alembic migrations
-backend/tests/            137 backend tests
+backend/tests/            169 backend tests
 distribution/             Windows portable build
 ```
 

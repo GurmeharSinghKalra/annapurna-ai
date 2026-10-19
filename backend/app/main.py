@@ -245,7 +245,9 @@ async def crop_recommendations(farm: FarmProfile, session: SessionDep) -> dict:
     return {
         "recommendations": recommendations,
         "ai_explanation": insight.model_dump() if insight else None,
-        "ai_provider": "gemini" if insight else "local_fallback",
+        # "local_fallback" named a fallback that does not exist: the field was simply null.
+        "ai_provider": "gemini" if insight else "none",
+        "ai_provider_note": None if insight else "An AI explanation needs GEMINI_API_KEY to be configured.",
         "price_source": "live mandi prices where available" if prices else "announced support prices",
         "price_notes": price_notes,
     }
@@ -255,15 +257,14 @@ async def crop_recommendations(farm: FarmProfile, session: SessionDep) -> dict:
 async def farm_analysis(farm: FarmProfile, session: SessionDep) -> dict:
     """The full workflow: weather, soil, ranked crops, rotation, market and an AI explanation.
 
-    Live weather updates temperature and humidity for the ranking, but never rainfall: the
-    provider reports rain over the last hour, while the crop model needs the seasonal total.
+    Live weather is reported, never scored. The crop bands are whole-season means, while the
+    provider returns one instant: substituting it made the same farm rank differently depending
+    on the hour it was asked. A 15C morning reading scored Maize first and Rice fifth; a 44C
+    afternoon reading reversed it. The farmer's own seasonal figures are what get ranked, and
+    the live observation is returned alongside for the weather panel and short-horizon advice.
     """
     weather_data = await fetch_weather(farm)
-    analysed_farm = (
-        farm.model_copy(update={"temperature": weather_data["temperature"], "humidity": weather_data["humidity"]})
-        if weather_data["live"]
-        else farm
-    )
+    analysed_farm = farm
 
     prices, price_notes = await prices_for(session, [item["crop"] for item in crop_catalog()], farm.location)
     recommendations = recommend(analysed_farm, prices)[:5]
@@ -291,16 +292,21 @@ async def farm_analysis(farm: FarmProfile, session: SessionDep) -> dict:
     return {
         "analyzed_at": datetime.now(UTC).isoformat(),
         "recommendations": recommendations,
+        # The exact profile the ranking used, so the UI never has to guess whether a live
+        # reading replaced something the farmer entered.
+        "analyzed_farm": analysed_farm.model_dump(),
         "weather": weather_data,
         "soil": soil_profile(analysed_farm),
         "markets": markets,
         "ai_explanation": insight.model_dump() if insight else None,
-        "ai_provider": "gemini" if insight else "local_fallback",
+        "ai_provider": "gemini" if insight else "none",
+        "ai_provider_note": None if insight else "An AI explanation needs GEMINI_API_KEY to be configured.",
         "crop_data": provenance(),
         "price_notes": price_notes,
         "data_note": (
             "Each section states its own source. Values marked as your input are not measurements, "
-            "and support prices are not sale prices."
+            "and support prices are not sale prices. Crop ranking uses the seasonal conditions you "
+            "entered; live weather is shown for context and does not change the ranking."
         ),
     }
 

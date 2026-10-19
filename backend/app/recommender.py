@@ -290,8 +290,14 @@ def recommend(farm: FarmProfile, prices: dict[str, int] | None = None) -> list[R
     ``prices`` optionally maps crop name to a live modal price per quintal. When a crop is absent
     the announced reference price is used and ``price_basis`` says so, so the farmer always knows
     which number the money was calculated from.
+
+    A price the farmer has entered for their own mandi beats both. No national feed reaches every
+    district, and where one does it reports a market average rather than the rate this farmer can
+    actually get; their own figure is the better input, and it is the only one available at all in
+    a district no feed covers.
     """
-    prices = prices or {}
+    prices = dict(prices or {})
+    prices.update(farm.known_market_prices)
     predicted_crop, confidence = predict_crop(farm)
     results: list[Recommendation] = []
 
@@ -320,7 +326,12 @@ def recommend(farm: FarmProfile, prices: dict[str, int] | None = None) -> list[R
             score = min(score, limiter.cap)
 
         price = prices.get(crop.name, crop.reference_price_per_quintal)
-        price_basis = "live mandi modal price" if crop.name in prices else crop.reference_price_basis
+        if crop.name in farm.known_market_prices:
+            price_basis = "the price you entered for your own mandi"
+        elif crop.name in prices:
+            price_basis = "live mandi modal price"
+        else:
+            price_basis = crop.reference_price_basis
         economics = _economics(crop, farm, price)
 
         typical_cost = economics["estimated_cost_inr"]["typical"]

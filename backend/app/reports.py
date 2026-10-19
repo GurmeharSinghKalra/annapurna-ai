@@ -68,10 +68,22 @@ def _inr(value: Any) -> str:
         return "Not available"
 
 
-def _value(source: dict[str, Any] | None, key: str, default: str = "Not available") -> str:
-    if not source or source.get(key) in (None, ""):
+def _value(source: Any, key: str, default: str = "Not available") -> str:
+    # `finance` arrives as a free-form dict, so a caller can put a list where a mapping belongs.
+    # Four such shapes used to reach a `.get` on an int and return a 500.
+    if not isinstance(source, dict) or source.get(key) in (None, ""):
         return default
     return safe(source[key], 160)
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _mappings(value: Any, limit: int) -> list[dict[str, Any]]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [item for item in value[:limit] if isinstance(item, dict)]
 
 
 def _table(rows: list[list[str]], widths: list[float], header: bool = False, right_align_from: int | None = None):
@@ -290,9 +302,9 @@ def pdf_report(request: PdfReportRequest, prices: dict[str, int] | None = None) 
         ),
     ]
 
-    finance = request.finance or {}
+    finance = _mapping(request.finance)
     if finance:
-        summary = finance.get("summary") or {}
+        summary = _mapping(finance.get("summary"))
         story += [
             Paragraph("Season finance", heading),
             _table(
@@ -319,7 +331,7 @@ def pdf_report(request: PdfReportRequest, prices: dict[str, int] | None = None) 
                 [32 * mm, 52 * mm, 32 * mm, 58 * mm],
             ),
         ]
-        expenses = finance.get("expenses") or []
+        expenses = _mappings(finance.get("expenses"), MAX_TABLE_ROWS)
         if expenses:
             story += [
                 Paragraph("Expense tracker", heading),
@@ -332,14 +344,14 @@ def pdf_report(request: PdfReportRequest, prices: dict[str, int] | None = None) 
                             _inr(item.get("actual")),
                             _inr(item.get("variance")),
                         ]
-                        for item in expenses[:MAX_TABLE_ROWS]
+                        for item in expenses
                     ],
                     [66 * mm, 34 * mm, 34 * mm, 40 * mm],
                     header=True,
                     right_align_from=1,
                 ),
             ]
-        scenarios = finance.get("scenarios") or []
+        scenarios = _mappings(finance.get("scenarios"), MAX_TABLE_ROWS)
         if scenarios:
             story += [
                 Paragraph("Risk scenarios", heading),
@@ -352,7 +364,7 @@ def pdf_report(request: PdfReportRequest, prices: dict[str, int] | None = None) 
                             _inr(item.get("cost")),
                             _inr(item.get("profit")),
                         ]
-                        for item in scenarios[:MAX_TABLE_ROWS]
+                        for item in scenarios
                     ],
                     [60 * mm, 38 * mm, 38 * mm, 38 * mm],
                     header=True,

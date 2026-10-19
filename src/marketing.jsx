@@ -174,7 +174,7 @@ function AboutPage({ navigate }) {
           <div><span>Interface</span><h3>React + Vite</h3><p>Planner, insights, season finance, image screening, advisor and saved records.</p></div>
           <div><span>API</span><h3>FastAPI</h3><p>Crop ranking, finance planning, weather, mandi prices, advisory chat, reports and accounts.</p></div>
           <div><span>Ranking</span><h3>Rules + scikit-learn</h3><p>A transparent weighted model with hard constraints, plus an optional trained classifier.</p></div>
-          <div><span>Storage</span><h3>PostgreSQL</h3><p>Accounts, saved plans, season budgets and a cache of official mandi prices.</p></div>
+          <div><span>Storage</span><h3>SQLite or PostgreSQL</h3><p>Accounts, saved plans, season budgets and a cache of mandi prices. SQLite by default; PostgreSQL for hosted deployments.</p></div>
         </div>
       </section>
 
