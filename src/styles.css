@@ -944,3 +944,259 @@ input, select { border: 1px solid #aeb9b2; border-radius: 8px; background: #fff;
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; }
 }
+
+/* ===================================================================
+   Components added in the accounts / honest-numbers rework.
+   Tokens come from :root at the top of this file.
+   =================================================================== */
+
+:root {
+  --danger: #a33a1c;
+  --danger-soft: #f6e3dc;
+  --warn: #8a5a12;
+  --warn-soft: #fbefd8;
+  --ok: #2f6044;
+  --ok-soft: #e2efe4;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: var(--navy);
+  color: #f5f1df;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus { left: 12px; top: 12px; }
+
+.boot-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: #cbd0c4;
+}
+
+/* ---- form fields ---- */
+
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field-label { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.field-label em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.field input,
+.field select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 2px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+.field-hint { font-size: 0.75rem; line-height: 1.35; color: var(--muted); }
+.field-error { font-size: 0.75rem; line-height: 1.35; font-weight: 600; color: var(--danger); }
+.field.has-error input,
+.field.has-error select { border-color: var(--danger); background: var(--danger-soft); }
+
+.range-field .range-row { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 9px; align-items: center; }
+.range-field input[type="range"] { width: 100%; accent-color: var(--green); }
+.range-number { padding: 6px 8px; border: 2px solid var(--line); background: #fff; text-align: right; }
+
+.form-grid.two { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+/* ---- notices ---- */
+
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 10px 0;
+  padding: 11px 13px;
+  border: 2px solid var(--line);
+  box-shadow: var(--hard-shadow);
+  background: var(--paper);
+}
+.notice p { margin: 0; font-size: 0.88rem; line-height: 1.45; }
+.notice small { display: block; margin-top: 3px; font-size: 0.73rem; color: var(--muted); }
+.notice > div { flex: 1; min-width: 0; }
+.notice-error { background: var(--danger-soft); border-color: var(--danger); color: #4a1c0c; }
+.notice-warn { background: var(--warn-soft); border-color: var(--warn); color: #4a3307; }
+.notice-ok { background: var(--ok-soft); border-color: var(--ok); color: #1d3d2b; }
+.notice-dismiss {
+  flex: none;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.spinner { display: inline-flex; align-items: center; gap: 7px; font-size: 0.86rem; }
+.spin { animation: annapurna-spin 0.9s linear infinite; }
+@keyframes annapurna-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+.status-line.warn { color: #4a3307; }
+.status-line.warn svg { color: var(--warn); }
+.status-line.info svg { color: var(--blue); }
+
+/* ---- verdict + crop card ---- */
+
+.verdict {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 2px solid var(--line);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.verdict-strong { background: #cfe6d3; }
+.verdict-good { background: #dfeccf; }
+.verdict-fair { background: #f4e7c6; }
+.verdict-poor { background: #f6ddc6; }
+.verdict-bad { background: #f0d2cb; color: #561a0b; }
+
+.crop-card.tone-not-recommended { opacity: 0.86; }
+.crop-card.tone-not-recommended .score-track span { background: #b4705a; }
+
+.crop-limiters {
+  margin: 9px 0 0;
+  padding: 9px 11px 9px 26px;
+  list-style: square;
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #4a1c0c;
+}
+
+.crop-economics { width: 100%; margin-top: 11px; border-collapse: collapse; font-size: 0.8rem; }
+.crop-economics caption { margin-bottom: 6px; font-size: 0.72rem; text-align: left; color: var(--muted); }
+.crop-economics th,
+.crop-economics td { padding: 5px 7px; border: 1px solid rgba(23, 32, 43, 0.22); text-align: right; }
+.crop-economics thead th { background: var(--paper-2); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.crop-economics tbody th { text-align: left; font-weight: 600; }
+.crop-economics .row-profit { font-weight: 700; }
+.crop-economics td.negative { color: var(--danger); }
+
+/* ---- bar chart ---- */
+
+.bar-chart { margin: 12px 0 0; }
+.bar-chart ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+.bar-chart li { display: grid; grid-template-columns: minmax(78px, 26%) minmax(0, 1fr) 74px; gap: 9px; align-items: center; }
+.bar-label { font-size: 0.78rem; font-weight: 600; }
+.bar-track { position: relative; height: 19px; border: 2px solid var(--line); background: #fff; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--green); }
+.bar-fill.revenue { background: var(--blue); }
+.bar-fill.cost { background: #9a8468; }
+.bar-fill.risk, .bar-fill.negative { background: #b4553a; }
+.bar-value { font-size: 0.79rem; font-weight: 700; text-align: right; }
+.bar-value.negative { color: var(--danger); }
+.bar-chart figcaption { margin-top: 8px; font-size: 0.76rem; color: var(--muted); }
+
+/* ---- tables ---- */
+
+.scenario-table { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 0.82rem; }
+.scenario-table th,
+.scenario-table td { padding: 7px 9px; border: 1px solid rgba(23, 32, 43, 0.2); text-align: right; }
+.scenario-table thead th { background: var(--paper-2); text-align: right; font-size: 0.72rem; text-transform: uppercase; }
+.scenario-table tbody th { text-align: left; font-weight: 700; }
+.scenario-table tbody th small { display: block; font-weight: 400; font-size: 0.72rem; color: var(--muted); }
+.scenario-table tr.negative td:last-child { color: var(--danger); font-weight: 700; }
+
+.nutrient-bands { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.nutrient-bands li {
+  display: flex; gap: 6px; align-items: baseline;
+  padding: 5px 9px; border: 2px solid var(--line); background: var(--paper);
+  font-size: 0.78rem;
+}
+.nutrient-bands span { text-transform: capitalize; color: var(--muted); }
+.nutrient-bands em { font-style: normal; font-weight: 700; }
+
+/* ---- integrations ---- */
+
+.integration-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.integration {
+  display: flex; gap: 11px; align-items: center; justify-content: space-between;
+  padding: 10px 12px; border: 2px solid var(--line); background: var(--paper);
+}
+.integration strong { display: block; font-size: 0.88rem; }
+.integration small { display: block; margin-top: 2px; font-size: 0.76rem; line-height: 1.4; color: var(--muted); }
+.badge {
+  flex: none; padding: 3px 9px; border: 2px solid var(--line);
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.badge-ok { background: var(--ok-soft); }
+.badge-warn { background: var(--warn-soft); }
+.badge-off { background: var(--paper-2); color: var(--muted); }
+
+/* ---- misc ---- */
+
+.icon-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px; border: 2px solid currentColor; background: transparent;
+  color: inherit; cursor: pointer; line-height: 0;
+}
+.icon-button.danger { color: var(--danger); }
+.danger-action {
+  padding: 9px 15px; border: 2px solid var(--danger);
+  background: var(--danger); color: #fff; font-weight: 700; cursor: pointer;
+}
+.secondary-action.danger { border-color: var(--danger); color: var(--danger); }
+.secondary-action.small { padding: 5px 11px; font-size: 0.8rem; }
+
+.record-actions { display: flex; gap: 7px; align-items: center; }
+.history-item small { display: block; margin-top: 3px; font-size: 0.76rem; color: var(--muted); }
+
+.sources { margin-top: 11px; font-size: 0.79rem; }
+.sources summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.sources ul { margin: 7px 0 0; padding-left: 19px; line-height: 1.5; color: var(--muted); }
+
+.chat-note { display: block; margin-top: 5px; font-size: 0.73rem; font-style: normal; color: var(--muted); }
+.diagnosis .confidence {
+  display: inline-block; margin-left: 8px; padding: 1px 7px;
+  border: 2px solid var(--line); background: var(--paper-2); font-size: 0.74rem; font-weight: 700;
+}
+.diagnosis ul { margin: 8px 0; padding-left: 19px; font-size: 0.85rem; line-height: 1.5; }
+
+.auth-skip {
+  margin-top: 18px; display: inline-flex; gap: 8px; align-items: center;
+  padding: 9px 14px; border: 2px solid currentColor; background: transparent;
+  color: inherit; font-weight: 600; cursor: pointer;
+}
+.auth-switch { margin-top: 14px; font-size: 0.86rem; text-align: center; }
+.auth-switch button {
+  border: none; background: none; padding: 0;
+  color: var(--green-dark); font-weight: 700; text-decoration: underline; cursor: pointer;
+}
+
+.cashflow-row em { font-style: normal; font-size: 0.76rem; color: var(--muted); }
+.expense-row label { display: flex; flex-direction: column; gap: 2px; }
+.expense-row em.under { color: var(--ok); }
+
+@media (max-width: 760px) {
+  .bar-chart li { grid-template-columns: minmax(66px, 32%) minmax(0, 1fr) 62px; }
+  .crop-economics { font-size: 0.74rem; }
+  .integration { flex-direction: column; align-items: flex-start; }
+  .range-field .range-row { grid-template-columns: minmax(0, 1fr) 72px; }
+}
+
+.about-story-copy h2 { margin: 6px 0 0; font-family: var(--font-display); font-size: clamp(1.4rem, 2.6vw, 2rem); line-height: 1.25; }
+
+.app-topbar h2:focus { outline: 3px solid #f5b748; outline-offset: 4px; }
+.app-topbar h2:focus:not(:focus-visible) { outline: none; }

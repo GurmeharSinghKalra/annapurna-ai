@@ -18,6 +18,7 @@ if (-not (Test-Path $python)) {
 Push-Location $projectRoot
 try {
     npm run build
+    & $python backend\scripts\build_dataset.py
     & $python backend\scripts\train_model.py
 
     if (-not $SkipInstall) {
@@ -34,6 +35,12 @@ try {
         --add-data "$projectRoot\dist;frontend" `
         --add-data "$backendRoot\data\crop_training_sample.csv;data" `
         --add-data "$backendRoot\models\crop_recommender.joblib;models" `
+        --add-data "$backendRoot\models\crop_recommender.metrics.json;models" `
+        --add-data "$backendRoot\migrations;migrations" `
+        --add-data "$backendRoot\alembic.ini;." `
+        --hidden-import aiosqlite `
+        --hidden-import sqlalchemy.dialects.sqlite.aiosqlite `
+        --collect-submodules sklearn `
         "$PSScriptRoot\portable_server.py"
 
     $appDirectory = Join-Path $releaseRoot "AnnapurnaAI"
@@ -72,15 +79,16 @@ Keep the black launcher window open while using the app. Double-click `STOP_ANNA
 
 ## Optional live AI and data services
 
-The app works in clearly labelled demo mode without any keys. To enable Gemini or live weather, create a file named `.env` in the `Annapurna-AI-Windows` folder and add:
+The app runs fully without any keys; features that need one say so on screen rather than showing placeholder data. To enable them, create a file named `.env` in the `Annapurna-AI-Windows` folder and add any of:
 
 ```text
 GEMINI_API_KEY=your_key
 OPENWEATHER_API_KEY=your_key
+AGMARKNET_API_KEY=your_key
 GEMINI_MODEL=gemini-3.6-flash
 ```
 
-Do not share your real API keys. Saved plans are stored locally in `AnnapurnaAI\data`.
+Do not share your real API keys. Your saved plans and season budgets are stored in the `data` folder beside the executable; copy that folder to move or back up your records.
 
 ## Troubleshooting
 

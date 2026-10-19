@@ -1,14 +1,30 @@
+# Dependencies
 node_modules/
+backend/.venv*/
+
+# Build output
 dist/
+release/
+backend/models/
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/crop_training_derived.csv
+
+# Environment
 .env
 .env.local
-backend/.venv/
-backend/.pytest_cache/
-backend/data/*.sqlite
-backend/models/*.joblib
+.env.*.local
+
+# Caches
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.vitest/
+coverage/
 *.log
-output/playwright/
-release/
-distribution/__pycache__/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/

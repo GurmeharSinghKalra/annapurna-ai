@@ -1,0 +1,110 @@
+# Where every number comes from
+
+This file exists because the most dangerous thing an agricultural advisory tool can do is state
+a figure with more confidence than it has earned. A farmer who commits a season's capital to a
+yield estimate that is twice reality is harmed by the product, not merely misinformed by it.
+
+## Scope
+
+Reference data covers the **irrigated North-Indian plains**: Haryana, Punjab and western Uttar
+Pradesh. The API publishes this scope at `GET /crops` under `provenance`, and the PDF report
+prints it. Figures outside this region need revalidation before they should be trusted.
+
+## Prices
+
+`reference_price_per_quintal` in `backend/app/crop_data.py` is an **announced support price**
+(MSP), not an expected sale price, and the API labels it that way everywhere it appears. Farmers
+routinely sell below MSP outside procurement windows.
+
+| Crop | Reference price (₹/quintal) | Basis |
+| --- | --- | --- |
+| Rice | 2,441 | MSP, paddy common grade, Kharif 2026-27 |
+| Maize | 2,400 | MSP, maize, Kharif 2026-27 (approximate — confirm the notified rate) |
+| Cotton | 8,267 | MSP, medium-staple kapas, cotton season 2026-27 |
+| Wheat | 2,585 | MSP, Rabi marketing season 2026-27 (₹2,610 announced for 2027-28) |
+| Mustard | 6,200 | MSP, rapeseed and mustard, Rabi 2026-27 (₹6,613 announced for 2027-28) |
+| Chickpea | 5,875 | MSP, gram, Rabi 2026-27 |
+| Sugarcane | 360 | Fair and Remunerative Price basis; state advised prices differ |
+| Pearl Millet | 2,900 | MSP, bajra, Kharif 2026-27 |
+
+When `AGMARKNET_API_KEY` is configured, a live daily modal price from the farmer's district
+replaces the reference price and `price_basis` changes to `live mandi modal price`.
+
+**These must be rechecked every season.** `crop_data.PRICE_SEASON` and `LAST_REVIEWED` record
+which season the table belongs to, and both are returned by the API.
+
+## Yields and costs
+
+Every crop carries `low / typical / high` for both yield and cost, because a single number reads
+as a promise. The poor-season case pairs the low yield with the high cost; the good season the
+reverse. The UI and both report formats show all three.
+
+Sources are recorded per crop in `crop_data.py` and surfaced in the API response, the PDF and the
+text report. They are drawn from state package-of-practices documents, university
+cost-of-cultivation studies and state crop-cutting reports.
+
+### Corrections made during the audit
+
+Two figures in the original table were wrong in a way that would have caused real harm:
+
+- **Cotton: 16 quintal/acre.** Roughly 2-3x the realistic kapas yield for Haryana, where pink
+  bollworm and whitefly pressure have driven yields down sharply. At the price in the same row
+  it implied about ₹75,000/acre profit, while a Haryana agricultural-university cost study
+  records an average **loss** of about ₹15,000/acre once realistic yields are used. Now
+  `3 / 6 / 10 q/acre`, and the advisory says plainly that a profitable cotton estimate is the
+  good-year case.
+- **Chickpea: 13 quintal/acre.** Around 2.5-3x published Indian productivity, which made it the
+  highest-margin crop in the catalogue purely as an artefact. Now `4 / 6 / 8 q/acre`.
+
+Mustard, bajra and paddy yields were also revised down towards published regional figures, and
+every support price was updated to the current season.
+
+## Rainfall
+
+`rainfall` is the **total expected across the season, in millimetres**. This is stated in the
+schema, the form label and the field hint, because the original had no stated basis at all: the
+UI slider capped at 300 mm, the crop bands were written as if monthly, and live weather
+substituted OpenWeather's `rain.1h` — millimetres in the *last hour* — into the same field.
+
+Water availability is now `rainfall + an irrigation allowance` set by the farmer's stated
+irrigation access (`Rainfed` 0 mm, `Limited` 250 mm, `Assured` 900 mm). Live weather updates
+temperature and humidity only; it never touches the seasonal rainfall figure.
+
+## Soil
+
+pH and NPK are **farmer-entered**, interpreted against standard soil-health-card bands. No soil
+laboratory or satellite feed is connected, and the response says so in `note` and `live: false`.
+The NPK values are a relative 0-100 index, not kg/ha.
+
+## The crop model
+
+`backend/scripts/build_dataset.py` derives training rows by sampling each crop's documented
+envelope. **These rows are derived, not observed** — they encode the same agronomic knowledge the
+rule engine uses, so a model trained on them largely re-learns those rules.
+
+The 24-row `crop_training_sample.csv` is hand-written observational data. It is never trained on
+and is used only to score the model.
+
+As of the last training run:
+
+| Measure | Value |
+| --- | --- |
+| Holdout accuracy (derived data) | 0.85 |
+| 5-fold cross-validation | 0.82 ± 0.01 |
+| Most-frequent-class baseline | 0.13 |
+| **Observational sample accuracy** | **0.38** |
+
+That last number is the honest one, and it is why the model's influence on the ranking is scaled
+by it rather than assumed. A model with no metrics, or one that cannot beat its baseline, is not
+loaded at all. `GET /admin/summary` reports all of this.
+
+Replacing the derived rows with real field records from state agriculture departments is the
+single highest-value upgrade available, and nothing else has to change when that happens.
+
+## What would make this trustworthy at scale
+
+1. District-level cost and yield datasets rather than one regional range per crop.
+2. A validated, labelled crop-disease image dataset, and a specialist model to replace
+   general-purpose vision screening.
+3. Review of the whole table by regional agronomists, recorded per crop with a review date.
+4. A seasonal process for refreshing support prices, with the review date enforced in CI.
