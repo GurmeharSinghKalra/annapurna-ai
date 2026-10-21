@@ -73,6 +73,14 @@ docker compose up --build
 
 Frontend on <http://127.0.0.1:5174>, API on <http://127.0.0.1:8000>.
 
+### One-click Windows start
+
+Double-click `run-annapurna.bat` in the project folder. On its first run it installs the
+frontend packages and backend Python environment, applies database migrations, starts both
+services, and opens <http://127.0.0.1:5173>. Node.js 20+ and Python 3.11+ must be installed
+first. Add optional API keys only to the local `.env` file; it is ignored by Git and must not
+be shared.
+
 ---
 
 ## API keys
